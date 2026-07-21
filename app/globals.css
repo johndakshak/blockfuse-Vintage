@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
+
+
 @theme {
+  
+  --color-cream: #f5f2ec;
+  --color-charcoal: #1a1a18;
+  --color-warmgray: #9a9690;
+  --color-accent: #c8a96e;
+  --color-hero: #e8e3d8;
+  --color-archive: #efebe3;
+  --color-approach: #ddd8cc;  
+
   --animate-marquee: marquee 30s linear infinite;
 
   @keyframes marquee {
