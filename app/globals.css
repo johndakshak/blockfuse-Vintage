@@ -5,16 +5,19 @@
   --color-charcoal: #1a1a18;
   --color-warmgray: #9a9690;
   --color-accent: #c8a96e;
+  --color-accent-dark: #a8893e;
   --color-hero: #e8e3d8;
   --color-archive: #efebe3;
   --color-approach: #ddd8cc;
+  --color-parchment: #e8e3d8;
+  --color-rust: #b05c3a;
+  --color-muted: #7a776f;
 
   --font-vintage: var(--font-vintage);
   --font-clean: var(--font-clean);
   --font-bebas: var(--font-bebas);
   --font-cormorant: var(--font-cormorant);
   --font-barlow: var(--font-barlow);
-
   --tracking-wider2: 0.18em;
   --tracking-wider3: 0.22em;
   --tracking-wider4: 0.28em;
