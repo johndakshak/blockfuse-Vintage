@@ -1,14 +1,68 @@
 @import "tailwindcss";
 
 @theme {
-  --animate-marquee: marquee 30s linear infinite;
+  --color-cream: #f5f2ec;
+  --color-charcoal: #1a1a18;
+  --color-warmgray: #9a9690;
+  --color-accent: #c8a96e;
+  --color-hero: #e8e3d8;
+  --color-archive: #efebe3;
+  --color-approach: #ddd8cc;
+
+  --font-vintage: var(--font-vintage);
+  --font-clean: var(--font-clean);
+  --font-bebas: var(--font-bebas);
+  --font-cormorant: var(--font-cormorant);
+  --font-barlow: var(--font-barlow);
+
+  --tracking-wider2: 0.18em;
+  --tracking-wider3: 0.22em;
+  --tracking-wider4: 0.28em;
+  --tracking-wider5: 0.30em;
+
+  --animate-marquee: marquee 18s linear infinite;
+
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes marquee {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
   }
 }
+
+/* Nav link underline animation */
+.nav-link {
+  position: relative;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #1a1a18;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-d1 { transition-delay: 0.1s; }
+.reveal-d2 { transition-delay: 0.2s; }
+.reveal-d3 { transition-delay: 0.3s; }
+.reveal-d4 { transition-delay: 0.4s; }
