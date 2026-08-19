@@ -25,10 +25,10 @@ export default function Navbar() {
         <>
             <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />        
             <nav id="navbar" 
-                className={`fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-12 ${ isScrolled ? "py-3" : "py-4" } z-[100] bg-cream/90 backdrop-blur-xl border-b border-charcoal/[.06] transition-all duration-300`}>
+                className={`fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-12 ${ isScrolled ? "py-1" : "py-2" } z-[100] bg-cream/90 backdrop-blur-xl border-b border-charcoal/[.06] transition-all duration-300`}>
                 <a href="#" className="flex items-center no-underline">
-                <Image src="/images/logo_accent-removebg-preview.png" alt="Blockfuse Vintage" width={160} height={40}
-                className="h-10 w-auto object-contain"
+                <Image src="/images/logo_accent-removebg-preview.png" alt="Blockfuse Vintage" width={10} height={10}
+                className="h-10 w-auto object-contain" style={{ height: "auto" }}
                 />
                 <span className="font-bebas text-[1.7rem] tracking-[0.12em] text-charcoal hidden">Blockfuse</span>
                 </a>
