@@ -18,11 +18,11 @@ export default function Hero() {
   }, []);
 
   return (
-    <section className="min-h-[calc(100vh-76px)] grid grid-cols-1 md:grid-cols-2 md:grid-rows-1 overflow-hidden">
+    <section className="min-h-[calc(100vh-56px)] grid grid-cols-1 md:grid-cols-2 md:grid-rows-1 overflow-hidden">
       {/* LEFT: emblem, name, tagline, buttons */}
       <div
         className="flex flex-col items-center pt-10 pb-12 px-6 md:pl-14 md:pr-12
-                   justify-center lg:justify-between lg:pt-14 lg:pb-16 lg:min-h-[calc(100vh-76px)]"
+                   justify-center lg:justify-between lg:pt-14 lg:pb-16 lg:min-h-[calc(100vh-56px)]"
       >
         <div className="text-center select-none w-full max-w-sm mx-auto">
           {/* Emblem */}
@@ -97,6 +97,7 @@ export default function Hero() {
           src="https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=900&q=80"
           alt="Hero model"
           fill
+          sizes="(max-width: 768px) 100vw, 50vw"
           className="object-cover transition-transform duration-[8000ms] ease-linear group-hover:scale-[1.04]"
           priority
         />

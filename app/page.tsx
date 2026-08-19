@@ -14,7 +14,7 @@ export default function Home() {
     <>
       <ScrollReveal />
       <Navbar />
-      <main className="pt-[72px] md:pt-[76px]">
+      <main className="pt-[52px] md:pt-[56px]">
         <Hero />
         <Marquee />
         <NewThisWeek />
