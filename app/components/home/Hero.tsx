@@ -1,6 +1,7 @@
 'use client'
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 export default function Hero() {
@@ -56,35 +57,35 @@ export default function Hero() {
 
           {/* Buttons: sm/md */}
           <div className="reveal reveal-d4 mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 lg:hidden">
-            <a
-              href="#"
+            <Link
+              href="/cart"
               className="inline-flex items-center gap-2 text-[0.72rem] tracking-wider3 uppercase text-cream bg-charcoal px-8 py-3.5 no-underline transition-all duration-300 hover:bg-accent whitespace-nowrap"
             >
               Shop Now →
-            </a>
-            <a
-              href="#"
+            </Link>
+            <Link
+              href="/register"
               className="inline-flex items-center gap-2 text-[0.72rem] tracking-wider3 uppercase text-charcoal bg-transparent px-8 py-3.5 no-underline border border-charcoal transition-all duration-300 hover:bg-accent hover:border-transparent hover:text-cream whitespace-nowrap"
             >
               Explore Lookbook
-            </a>
+            </Link>
           </div>
         </div>
 
         {/* Buttons: lg */}
         <div className="reveal reveal-d4 hidden lg:flex flex-row items-center justify-center gap-3 w-full max-w-sm mt-auto">
-          <a
-            href="#"
+          <Link
+            href="/cart"
             className="inline-flex items-center gap-2 text-[0.72rem] tracking-wider3 uppercase text-cream bg-charcoal px-8 py-3.5 no-underline transition-all duration-300 hover:bg-accent whitespace-nowrap"
           >
             Shop Now →
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            href="/register"
             className="inline-flex items-center gap-2 text-[0.72rem] tracking-wider3 uppercase text-charcoal bg-transparent px-8 py-3.5 no-underline border border-charcoal transition-all duration-300 hover:bg-accent hover:border-transparent hover:text-cream whitespace-nowrap"
           >
             Explore Lookbook
-          </a>
+          </Link>
         </div>
       </div>
 
