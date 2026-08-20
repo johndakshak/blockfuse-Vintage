@@ -70,13 +70,18 @@ export default function CartPage() {
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-center gap-6">
-          {["New Collection", "Men", "Women", "Accessories"].map((link) => (
+          {[
+            { label: "New Collection", href: "/#new-collection" },
+            { label: "Men",            href: "/#men" },
+            { label: "Women",          href: "/#women" },
+            { label: "Accessories",    href: "/#accessories" },
+          ].map(({ label, href }) => (
             <Link
-              key={link}
-              href="#"
+              key={label}
+              href={href}
               className="text-[0.72rem] tracking-[0.15em] uppercase text-muted hover:text-charcoal transition-colors no-underline"
             >
-              {link}
+              {label}
             </Link>
           ))}
         </div>
