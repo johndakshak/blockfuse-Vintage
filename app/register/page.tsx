@@ -114,14 +114,18 @@ export default function RegisterPage() {
 
         <div className="w-full max-w-md">
 
-          {/* Mobile logo */}
-          <div className="flex flex-col items-center lg:hidden mb-8 text-center">
-            <div className="h-16 w-16 rounded-full border-2 border-accent flex items-center justify-center bg-charcoal mb-3">
+          {/* Mobile logo — links back to homepage */}
+          <Link
+            href="/"
+            className="flex flex-col items-center lg:hidden mb-8 text-center group"
+            aria-label="Back to Blockfuse Vintage homepage"
+          >
+            <div className="h-16 w-16 rounded-full border-2 border-accent flex items-center justify-center bg-charcoal mb-3 transition-opacity duration-200 group-hover:opacity-80">
               <span className="font-vintage text-accent text-xl">BV</span>
             </div>
-            <span className="font-bebas text-2xl tracking-[0.15em] text-charcoal leading-none">Blockfuse</span>
-            <span className="text-warmgray text-[0.6rem] tracking-[0.35em] uppercase font-barlow mt-1">Vintage</span>
-          </div>
+            <span className="font-bebas text-2xl tracking-[0.15em] text-charcoal leading-none transition-opacity duration-200 group-hover:opacity-80">Blockfuse</span>
+            <span className="text-warmgray text-[0.6rem] tracking-[0.35em] uppercase font-barlow mt-1 transition-opacity duration-200 group-hover:opacity-80">Vintage</span>
+          </Link>
 
           {/* Heading */}
           <p className="text-accent text-xs tracking-[0.3em] uppercase font-barlow mb-2">Get Started</p>

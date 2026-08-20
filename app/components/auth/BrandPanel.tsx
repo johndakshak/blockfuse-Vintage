@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type BrandPanelProps = {
   quote: string;
 };
@@ -43,27 +45,29 @@ export default function BrandPanel({ quote }: BrandPanelProps) {
       />
 
       {/* Content */}
-      <div className="text-center select-none w-full max-w-xs mx-auto z-10">
-        {/* Emblem */}
-        <div
-          className="mx-auto mb-6 h-24 w-24 rounded-full border-4 border-accent flex items-center justify-center"
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            boxShadow: "0 0 30px rgba(200,169,110,0.2)",
-          }}
-        >
-          <span className="text-3xl font-vintage text-accent">BV</span>
-        </div>
+      <div className="text-center w-full max-w-xs mx-auto z-10">
+        {/* Emblem + brand name — clicking navigates home */}
+        <Link href="/" className="no-underline group" aria-label="Back to Blockfuse Vintage homepage">
+          <div
+            className="mx-auto mb-6 h-24 w-24 rounded-full border-4 border-accent flex items-center justify-center transition-opacity duration-200 group-hover:opacity-80"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              boxShadow: "0 0 30px rgba(200,169,110,0.2)",
+            }}
+          >
+            <span className="text-3xl font-vintage text-accent select-none">BV</span>
+          </div>
 
-        {/* Brand name */}
-        <h1 className="font-vintage text-4xl sm:text-5xl md:text-6xl tracking-widest text-accent">
-          Blockfuse
-        </h1>
+          {/* Brand name */}
+          <h1 className="font-vintage text-4xl sm:text-5xl md:text-6xl tracking-widest text-accent select-none transition-opacity duration-200 group-hover:opacity-80">
+            Blockfuse
+          </h1>
 
-        {/* Sub brand */}
-        <p className="mt-2 font-clean text-xs sm:text-sm tracking-[0.35em] uppercase text-warmgray">
-          Vintage
-        </p>
+          {/* Sub brand */}
+          <p className="mt-2 font-clean text-xs sm:text-sm tracking-[0.35em] uppercase text-warmgray select-none">
+            Vintage
+          </p>
+        </Link>
 
         {/* Decorative line */}
         <div className="mt-5 flex items-center justify-center gap-4">

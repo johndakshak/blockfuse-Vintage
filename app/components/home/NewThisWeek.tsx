@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 type Product = {
   name: string;
@@ -90,12 +91,12 @@ export default function NewThisWeek() {
       </div>
 
       <div className="reveal mt-8 md:mt-10 flex justify-center">
-        <a
-          href="#"
+        <Link
+          href="/cart"
           className="inline-flex items-center gap-3 text-[0.72rem] tracking-wider3 uppercase text-charcoal bg-transparent px-8 md:px-10 py-[0.9rem] no-underline border border-charcoal transition-all duration-300 hover:bg-charcoal hover:text-cream w-fit"
         >
           View All New Arrivals
-        </a>
+        </Link>
       </div>
     </section>
   );

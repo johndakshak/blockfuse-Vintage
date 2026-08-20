@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 const stats = [
   { value: "12+", label: "Collections" },
@@ -38,12 +39,12 @@ export default function Approach() {
           wardrobe.
         </p>
         <div className="reveal reveal-d3 mb-8">
-          <a
-            href="#"
+          <Link
+            href="/register"
             className="inline-flex items-center gap-3 text-[0.72rem] tracking-wider3 uppercase text-cream bg-charcoal px-8 md:px-10 py-4 no-underline transition-all duration-300 hover:bg-accent w-fit"
           >
             Discover Our Story
-          </a>
+          </Link>
         </div>
         <div className="reveal reveal-d4 flex gap-8 md:gap-12 flex-wrap">
           {stats.map((s) => (

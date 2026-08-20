@@ -62,18 +62,22 @@ export default function LoginPage() {
 
         <div className="w-full max-w-md">
 
-          {/* Mobile logo */}
-          <div className="flex flex-col items-center lg:hidden mb-10 text-center">
-            <div className="h-16 w-16 rounded-full border-2 border-accent flex items-center justify-center bg-charcoal mb-3">
+          {/* Mobile logo — links back to homepage */}
+          <Link
+            href="/"
+            className="flex flex-col items-center lg:hidden mb-10 text-center group"
+            aria-label="Back to Blockfuse Vintage homepage"
+          >
+            <div className="h-16 w-16 rounded-full border-2 border-accent flex items-center justify-center bg-charcoal mb-3 transition-opacity duration-200 group-hover:opacity-80">
               <span className="font-vintage text-accent text-xl">BV</span>
             </div>
-            <span className="font-bebas text-2xl tracking-[0.15em] text-charcoal leading-none">
+            <span className="font-bebas text-2xl tracking-[0.15em] text-charcoal leading-none transition-opacity duration-200 group-hover:opacity-80">
               Blockfuse
             </span>
-            <span className="text-warmgray text-[0.6rem] tracking-[0.35em] uppercase font-barlow mt-1">
+            <span className="text-warmgray text-[0.6rem] tracking-[0.35em] uppercase font-barlow mt-1 transition-opacity duration-200 group-hover:opacity-80">
               Vintage
             </span>
-          </div>
+          </Link>
 
           {/* Heading */}
           <p className="text-accent text-xs tracking-[0.3em] uppercase font-barlow mb-2">
@@ -200,8 +204,19 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Create account prompt */}
+          <p className="text-sm font-barlow font-light text-muted text-center mt-6">
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/register"
+              className="text-accent hover:text-rust font-normal transition-colors hover:underline underline-offset-2"
+            >
+              Create account
+            </Link>
+          </p>
+
           {/* Privacy note */}
-          <p className="text-[0.7rem] text-muted text-center mt-6 font-barlow leading-relaxed">
+          <p className="text-[0.7rem] text-muted text-center mt-4 font-barlow leading-relaxed">
             By signing in, you agree to our{" "}
             <Link href="/terms" className="text-accent hover:underline">
               Terms

@@ -108,13 +108,15 @@ export default function Sidebar({ active, onNavigate, isOpen, onClose }: Props) 
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-charcoal/[0.09]">
-          <div className="w-10 h-10 rounded-xl bg-charcoal flex items-center justify-center flex-shrink-0">
-            <span className="font-cormorant text-accent text-[1rem] font-semibold">BV</span>
-          </div>
-          <div>
-            <div className="font-bebas text-[1.1rem] tracking-[0.1em] text-charcoal leading-none">Blockfuse</div>
-            <div className="text-[0.58rem] tracking-[0.25em] uppercase text-warmgray mt-0.5">Vintage · Admin</div>
-          </div>
+          <Link href="/" className="flex items-center gap-3 no-underline">
+            <div className="w-10 h-10 rounded-xl bg-charcoal flex items-center justify-center flex-shrink-0">
+              <span className="font-cormorant text-accent text-[1rem] font-semibold">BV</span>
+            </div>
+            <div>
+              <div className="font-bebas text-[1.1rem] tracking-[0.1em] text-charcoal leading-none">Blockfuse</div>
+              <div className="text-[0.58rem] tracking-[0.25em] uppercase text-warmgray mt-0.5">Vintage · Admin</div>
+            </div>
+          </Link>
         </div>
 
         {/* Nav */}
