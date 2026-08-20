@@ -36,11 +36,11 @@ export default function Navbar() {
 
                 <div className="hidden md:flex gap-10">
                 {/* These sections don't have dedicated pages yet — anchored to home sections */}
-                <a href="/#new-collection" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">New Collection</a>
-                <a href="/#men" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">Men</a>
-                <a href="/#women" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">Women</a>
-                <a href="/#about" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">About</a>
-                <a href="/#contact" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">Contact</a>
+                <Link href="/#new-collection" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">New Collection</Link>
+                <Link href="/#men" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">Men</Link>
+                <Link href="/#women" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">Women</Link>
+                <Link href="/#about" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">About</Link>
+                <Link href="/#contact" className="nav-link text-[0.75rem] tracking-wider2 uppercase text-charcoal no-underline">Contact</Link>
                 </div>
 
                 {/* <!-- Search bar (desktop) --> */}

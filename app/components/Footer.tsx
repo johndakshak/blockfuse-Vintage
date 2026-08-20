@@ -80,9 +80,9 @@ export default function Footer() {
           © 2025 XIV QR — johndakshak. All rights reserved.
         </p>
         <p className="text-[0.7rem] tracking-[0.1em] text-cream/35">
-          <Link href="/login" className="hover:text-cream/60 transition-colors no-underline text-cream/35">Privacy Policy</Link>
+          <Link href="/privacy" className="hover:text-cream/60 transition-colors no-underline text-cream/35">Privacy Policy</Link>
           {" · "}
-          <Link href="/login" className="hover:text-cream/60 transition-colors no-underline text-cream/35">Terms &amp; Conditions</Link>
+          <Link href="/terms" className="hover:text-cream/60 transition-colors no-underline text-cream/35">Terms &amp; Conditions</Link>
         </p>
       </div>
     </footer>

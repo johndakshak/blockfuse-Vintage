@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const fmt = (n: number) => "₦" + n.toLocaleString("en-NG");
 
 type CartItem = {
@@ -29,10 +31,10 @@ export default function OrderSummary({ shipCost }: Props) {
       <div className="bg-white border border-charcoal/10 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-charcoal/10">
           <span className="font-cormorant text-[1.05rem] font-semibold text-charcoal">Order Summary</span>
-          <a href="/cart" className="text-[0.68rem] tracking-[0.1em] uppercase text-accent-dark transition-opacity hover:opacity-70"
+          <Link href="/cart" className="text-[0.68rem] tracking-[0.1em] uppercase text-accent-dark transition-opacity hover:opacity-70"
             style={{ color: "#a8893e" }}>
             Edit Cart
-          </a>
+          </Link>
         </div>
 
         {/* Items */}

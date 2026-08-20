@@ -23,12 +23,12 @@ export default function MobileMenu({isOpen, onClose}: MobileMenuProps) {
                         <X className="w-8 h-8 text-cream" />                        
                     </button>
                     {/* Category links anchor to home page sections */}
-                    <a href="/#new-collection" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">New Collection</a>
-                    <a href="/#men" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Men</a>
-                    <a href="/#women" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Women</a>
-                    <a href="/#accessories" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Accessories</a>
-                    <a href="/#about" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">About</a>
-                    <a href="/#contact" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Contact</a>
+                    <Link href="/#new-collection" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">New Collection</Link>
+                    <Link href="/#men" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Men</Link>
+                    <Link href="/#women" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Women</Link>
+                    <Link href="/#accessories" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Accessories</Link>
+                    <Link href="/#about" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">About</Link>
+                    <Link href="/#contact" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-cream hover:text-accent transition-colors duration-200">Contact</Link>
                     <Link href="/login" onClick={onClose} className="font-bebas text-4xl sm:text-5xl tracking-widest text-accent hover:text-cream transition-colors duration-200">Sign In</Link>
             </div>        
         </>
