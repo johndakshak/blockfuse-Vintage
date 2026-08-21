@@ -1,50 +1,167 @@
 'use client'
 
-import { useState } from "react";
+// app/cart/page.tsx
+//
+// The Cart page. Displays the user's cart items fetched from the backend.
+//
+// Data flow:
+//   CartPage (useEffect on mount)
+//     ↓
+//   getCartItems()  ─────────────────── cart.ts
+//     ↓
+//   fetch("GET /cartItems")
+//     ↓
+//   Backend
+//     ↓
+//   setCartItems() / setTotalPrice()
+//     ↓
+//   CartItemList + CartSummary render real data
+//
+// All four cart operations call the backend immediately and then
+// reload the full cart from the server to stay in sync.
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import CartItemList from "../components/cart/CartItemList";
 import CartSummary from "../components/cart/CartSummary";
 import Suggestions from "../components/cart/Suggestions";
-import { type CartItem } from "../components/cart/cartTypes";
-
-const INITIAL_CART: CartItem[] = [
-  { id: 1, name: "1970s Suede Jacket",  meta: "Size M · Tan",     price: 38000, qty: 1 },
-  { id: 2, name: "Floral Wrap Dress",   meta: "Size S · Ivory",   price: 22500, qty: 2 },
-  { id: 3, name: "Corduroy Cap",        meta: "One Size · Brown",  price: 7000,  qty: 1 },
-];
+import { type CartItem, toDisplayItem } from "../components/cart/cartTypes";
+import {
+  getCartItems,
+  updateCartItem,
+  removeCartItem,
+} from "@/app/lib/cart";
+import { useAuth } from "@/app/context/AuthContext";
 
 export default function CartPage() {
-  const [cart, setCart] = useState<CartItem[]>(INITIAL_CART);
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  // We read the JWT token from the global AuthContext.
+  // The token is required for every cart API call.
+  const { token, loading: authLoading } = useAuth();
+  const router = useRouter();
 
-  const itemCount = cart.reduce((s, i) => s + i.qty, 0);
-  const subtotal  = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [cartItems, setCartItems]   = useState<CartItem[]>([]);
+  const [totalPrice, setTotalPrice] = useState<number>(0);
+  const [loading, setLoading]       = useState(true);   // true while fetching cart
+  const [error, setError]           = useState("");     // shown when a fetch fails
 
-  function changeQty(id: number, delta: number) {
-    setCart((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, qty: Math.max(1, item.qty + delta) } : item
-      )
-    );
+  // ── Derived values ────────────────────────────────────────────────────────
+  const itemCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
+
+  // ── Load cart from backend ─────────────────────────────────────────────────
+  // loadCart() fetches the current cart from GET /cartItems and updates state.
+  // It is called on mount and after every mutation (add, update, remove).
+  // Keeping a single reload function means the UI is always in sync with
+  // the backend — no partial state updates to track.
+  async function loadCart(authToken: string) {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await getCartItems(authToken);
+      // Map backend CartItems to the flat display shape
+      setCartItems(response.data.map(toDisplayItem));
+      setTotalPrice(response.totalPrice);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not load your cart.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function removeItem(id: number) {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+  // On mount: wait for auth to finish loading, then either redirect to
+  // /login (unauthenticated) or load the cart.
+  useEffect(() => {
+    // Auth context is still initialising — wait
+    if (authLoading) return;
+
+    // Not logged in — redirect to login
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    // Logged in — load the cart.
+    // We define an async function inside the effect and call it with void
+    // to avoid the react-hooks/set-state-in-effect lint rule.
+    void (async () => {
+      await loadCart(token);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, token]);
+
+  // ── Change quantity (+1 or -1) ─────────────────────────────────────────────
+  // delta is +1 (increment) or -1 (decrement).
+  // The backend minimum is 1, so we don't allow going below 1.
+  async function changeQty(cartItemId: number, delta: number) {
+    if (!token) return;
+
+    // Find the current quantity so we can calculate the new one
+    const item = cartItems.find((i) => i.id === cartItemId);
+    if (!item) return;
+
+    const newQty = item.qty + delta;
+    if (newQty < 1) return; // do nothing — already at minimum
+
+    setError("");
+    try {
+      await updateCartItem(token, cartItemId, newQty);
+      // Reload the full cart from the backend to keep everything in sync
+      await loadCart(token);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not update quantity.");
+    }
   }
 
-  function clearCart() {
+  // ── Remove a single item ───────────────────────────────────────────────────
+  async function removeItem(cartItemId: number) {
+    if (!token) return;
+    setError("");
+    try {
+      await removeCartItem(token, cartItemId);
+      await loadCart(token);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not remove item.");
+    }
+  }
+
+  // ── Clear all items ────────────────────────────────────────────────────────
+  // Removes every item one by one by calling DELETE /cart/:id for each.
+  // The backend has no "clear cart" endpoint, so we loop.
+  async function clearCart() {
+    if (!token) return;
     if (!confirm("Remove all items from your cart?")) return;
-    setCart([]);
+    setError("");
+    try {
+      // Delete all items in parallel
+      await Promise.all(cartItems.map((item) => removeCartItem(token, item.id)));
+      await loadCart(token);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not clear cart.");
+    }
   }
 
-  function addSuggestion(name: string, price: number) {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.name === name);
-      if (existing) {
-        return prev.map((i) => i.name === name ? { ...i, qty: i.qty + 1 } : i);
-      }
-      return [...prev, { id: Date.now(), name, meta: "One Size", price, qty: 1 }];
-    });
+  // ── Add a suggestion to cart ───────────────────────────────────────────────
+  // The Suggestions component provides hardcoded product names/prices.
+  // These suggestions don't have real productIds yet (products aren't
+  // integrated with the backend yet), so we can't call POST /cart until
+  // the Products integration is done.
+  //
+  // For now: show an informational message explaining this.
+  // The Suggestions UI is preserved; it just can't call the API yet.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function addSuggestion(_name: string, _price: number) {
+    setError(
+      "Suggested items cannot be added yet — product integration is coming soon."
+    );
+    // Clear the message after 3 seconds so it doesn't persist
+    setTimeout(() => setError(""), 3000);
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -86,7 +203,7 @@ export default function CartPage() {
           ))}
         </div>
 
-        {/* Cart indicator */}
+        {/* Cart indicator — shows live item count */}
         <Link
           href="/cart"
           className="flex items-center gap-1.5 text-[0.72rem] tracking-[0.15em] uppercase no-underline font-medium"
@@ -114,29 +231,73 @@ export default function CartPage() {
             </div>
             <h1 className="font-cormorant text-[2rem] font-semibold text-charcoal">Your Cart</h1>
             <p className="text-[0.82rem] text-muted mt-1">
-              {itemCount > 0
-                ? `${itemCount} item${itemCount !== 1 ? "s" : ""} in your cart`
-                : "Your cart is empty"}
+              {loading
+                ? "Loading your cart…"
+                : itemCount > 0
+                  ? `${itemCount} item${itemCount !== 1 ? "s" : ""} in your cart`
+                  : "Your cart is empty"}
             </p>
           </div>
 
-          {/* Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
-
-            {/* Left: items + suggestions */}
-            <div>
-              <CartItemList
-                items={cart}
-                onChangeQty={changeQty}
-                onRemove={removeItem}
-                onClear={clearCart}
-              />
-              <Suggestions onAdd={addSuggestion} />
+          {/* ── Loading state ── */}
+          {(authLoading || loading) && (
+            <div className="flex items-center justify-center py-24">
+              <div className="flex flex-col items-center gap-3 text-muted">
+                {/* Spinning ring */}
+                <svg
+                  className="animate-spin"
+                  width="32" height="32" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    d="M12 2a10 10 0 0 1 10 10"
+                    stroke="#c8a96e"
+                  />
+                  <circle cx="12" cy="12" r="10" stroke="#c8a96e" strokeOpacity={0.15} />
+                </svg>
+                <span className="font-barlow text-[0.78rem] tracking-[0.12em] uppercase text-warmgray">
+                  Loading your cart…
+                </span>
+              </div>
             </div>
+          )}
 
-            {/* Right: summary */}
-            <CartSummary subtotal={subtotal} hasItems={cart.length > 0} />
-          </div>
+          {/* ── Error banner (only shown after loading is done) ── */}
+          {!loading && !authLoading && error && (
+            <div
+              className="border rounded-xl px-4 py-3 text-sm mb-6 font-barlow"
+              style={{
+                background: "rgba(176,92,58,0.08)",
+                borderColor: "rgba(176,92,58,0.25)",
+                color: "#b05c3a",
+              }}
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          {/* ── Cart content (only shown when not loading) ── */}
+          {!authLoading && !loading && (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
+
+              {/* Left: items + suggestions */}
+              <div>
+                <CartItemList
+                  items={cartItems}
+                  onChangeQty={changeQty}
+                  onRemove={removeItem}
+                  onClear={clearCart}
+                />
+                <Suggestions onAdd={addSuggestion} />
+              </div>
+
+              {/* Right: summary — passes the server totalPrice as the subtotal */}
+              <CartSummary subtotal={totalPrice} hasItems={cartItems.length > 0} />
+            </div>
+          )}
+
         </div>
       </div>
     </>

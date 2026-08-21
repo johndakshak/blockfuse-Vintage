@@ -2,29 +2,47 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BrandPanel from "../components/auth/BrandPanel";
+import { loginUser } from "@/app/lib/auth";
+import { useAuth } from "@/app/context/AuthContext";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // useRouter lets us redirect the user after login
+  const router = useRouter();
+
+  // useAuth gives us the login() function to save the token and user
+  const { login } = useAuth();
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
+    // Read the email and password values from the form
     const form = e.currentTarget;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
     try {
-      // TODO: wire up to auth service
-      console.log("Login attempt:", { email, password });
-      // Simulate async call
-      await new Promise((r) => setTimeout(r, 800));
-      // On success: router.push('/') or redirect
+      // Step 1: Call POST /login on the backend
+      // loginUser() returns { success, msg, access_token } on success
+      // or throws an Error with the backend's error message on failure
+      const response = await loginUser(email, password);
+
+      // Step 2: Save the token and fetch the user profile via GET /me
+      // login() is from AuthContext — it stores the token in localStorage
+      // and sets the user in global state
+      await login(response.access_token);
+
+      // Step 3: Redirect to the homepage
+      router.push("/");
     } catch (err: unknown) {
+      // Show the error message (e.g. "Invalid email or password")
       setError(err instanceof Error ? err.message : "Invalid email or password.");
     } finally {
       setLoading(false);

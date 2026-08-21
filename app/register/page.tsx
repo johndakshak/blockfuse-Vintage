@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BrandPanel from "../components/auth/BrandPanel";
+import { registerUser } from "@/app/lib/auth";
 
 type StrengthLevel = {
   pct: string;
@@ -52,17 +54,21 @@ export default function RegisterPage() {
 
   const strength = getStrength(password);
 
+  // useRouter lets us redirect the user to /login after successful registration
+  const router = useRouter();
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
 
     const form        = e.currentTarget;
-    const firstName   = (form.elements.namedItem("firstName")    as HTMLInputElement).value;
-    const lastName    = (form.elements.namedItem("lastName")     as HTMLInputElement).value;
-    const email       = (form.elements.namedItem("email")        as HTMLInputElement).value;
-    const phone       = (form.elements.namedItem("phone")        as HTMLInputElement).value;
+    const firstName   = (form.elements.namedItem("firstName")       as HTMLInputElement).value;
+    const lastName    = (form.elements.namedItem("lastName")        as HTMLInputElement).value;
+    const email       = (form.elements.namedItem("email")           as HTMLInputElement).value;
     const confirmPwd  = (form.elements.namedItem("confirmPassword") as HTMLInputElement).value;
-    const terms       = (form.elements.namedItem("terms")        as HTMLInputElement).checked;
+    const terms       = (form.elements.namedItem("terms")           as HTMLInputElement).checked;
+
+    // ── Frontend validations ──────────────────────────────────────────────────
 
     if (password !== confirmPwd) {
       setError("Passwords do not match.");
@@ -73,13 +79,22 @@ export default function RegisterPage() {
       return;
     }
 
+    // The backend expects a single "name" field.
+    // We combine the first and last name from the form.
+    const fullName = `${firstName} ${lastName}`.trim();
+
     setLoading(true);
     try {
-      // TODO: wire up to auth service
-      console.log("Register attempt:", { firstName, lastName, email, phone });
-      await new Promise((r) => setTimeout(r, 800));
-      // On success: router.push('/')
+      // Step 1: Call POST /users/create on the backend
+      // registerUser() returns { success, msg, data: { name, email } } on success
+      // or throws an Error with the backend's error message on failure
+      await registerUser(fullName, email, password);
+
+      // Step 2: Registration succeeded — send the user to the login page.
+      // Registration does not return a token; they need to log in separately.
+      router.push("/login");
     } catch (err: unknown) {
+      // Show the error message (e.g. "Email already exists" or weak password)
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
