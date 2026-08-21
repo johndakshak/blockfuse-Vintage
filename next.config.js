@@ -8,6 +8,13 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        // Cloudinary — used for real product images uploaded via the admin
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
