@@ -5,10 +5,18 @@ import MobileMenu from "./MobileMenu";
 import { Menu } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/context/AuthContext";
 
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
+
+    // Get the logged-in user and the logout function from auth context
+    const { user, logout } = useAuth();
+
+    // useRouter lets us redirect after logout
+    const router = useRouter();
 
     useEffect(() => {
 
@@ -21,6 +29,12 @@ export default function Navbar() {
         return () => window.removeEventListener("scroll", handleScroll)
 
     }, []);
+
+    // Called when the user clicks "Sign Out"
+    function handleLogout() {
+        logout();         // clears token from localStorage and user from context
+        router.push("/"); // redirect to homepage
+    }
 
     return (
         <>
@@ -59,10 +73,25 @@ export default function Navbar() {
                 {/* <!-- Search icon: mobile only --> */}
                 <svg className="flex md:hidden w-[18px] h-[18px] stroke-charcoal fill-none" strokeWidth="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
 
-                {/* <!-- Sign In button --> */}
-                <Link href="/login" className="hidden md:inline-flex items-center gap-1.5 text-[0.68rem] tracking-[0.18em] uppercase text-charcoal border border-charcoal/30 px-4 py-2 no-underline hover:bg-charcoal hover:text-cream transition-all duration-200">
-                    Sign In
-                </Link>
+                {/* Show "Sign In" if not logged in, or the user's name + "Sign Out" if logged in */}
+                {user ? (
+                    <div className="hidden md:flex items-center gap-3">
+                        {/* Greet the user by first name */}
+                        <span className="text-[0.68rem] tracking-[0.18em] uppercase text-charcoal font-barlow">
+                            Hi, {user.name.split(" ")[0]}
+                        </span>
+                        <button
+                            onClick={handleLogout}
+                            className="text-[0.68rem] tracking-[0.18em] uppercase text-charcoal border border-charcoal/30 px-4 py-2 hover:bg-charcoal hover:text-cream transition-all duration-200 cursor-pointer"
+                        >
+                            Sign Out
+                        </button>
+                    </div>
+                ) : (
+                    <Link href="/login" className="hidden md:inline-flex items-center gap-1.5 text-[0.68rem] tracking-[0.18em] uppercase text-charcoal border border-charcoal/30 px-4 py-2 no-underline hover:bg-charcoal hover:text-cream transition-all duration-200">
+                        Sign In
+                    </Link>
+                )}
 
                 {/* <!-- Cart icon --> */}
                 <Link href="/cart" aria-label="View cart" className="no-underline">

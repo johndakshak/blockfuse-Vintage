@@ -7,6 +7,7 @@ import {
   Cormorant_Garamond,
   Barlow,
 } from "next/font/google";
+import { AuthProvider } from "@/app/context/AuthContext";
 
 const playfair = Playfair_Display({
   variable: "--font-vintage",
@@ -54,7 +55,9 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${inter.variable} ${bebas.variable} ${cormorant.variable} ${barlow.variable} min-h-full flex flex-col bg-cream text-charcoal font-barlow font-light overflow-x-hidden`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
