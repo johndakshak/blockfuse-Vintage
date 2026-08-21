@@ -1,29 +1,26 @@
+// app/components/checkout/OrderSummary.tsx
+//
+// Displays the order summary on the right side of the Checkout page.
+//
+// Previously this component had a hardcoded CART_ITEMS array.
+// It now receives real cart data through props from the Checkout page,
+// which fetches it via getCartItems() on mount.
+
 import Link from "next/link";
-
-const fmt = (n: number) => "₦" + n.toLocaleString("en-NG");
-
-type CartItem = {
-  name: string;
-  meta: string;
-  price: number;
-  qty: number;
-};
-
-const CART_ITEMS: CartItem[] = [
-  { name: "1970s Suede Jacket",  meta: "Size M · Tan",    price: 38000, qty: 1 },
-  { name: "Floral Wrap Dress",   meta: "Size S · Ivory",  price: 45000, qty: 2 },
-  { name: "Corduroy Cap",        meta: "One Size · Brown", price: 7000,  qty: 1 },
-];
-
-const SUBTOTAL = CART_ITEMS.reduce((s, i) => s + i.price * i.qty, 0);
-const ITEM_COUNT = CART_ITEMS.reduce((s, i) => s + i.qty, 0);
+import { type CartItem, fmt } from "@/app/components/cart/cartTypes";
 
 type Props = {
+  // The user's real cart items (fetched from GET /cartItems)
+  items: CartItem[];
+  // The server-calculated subtotal from GET /cartItems (totalPrice field)
+  cartTotal: number;
+  // The shipping cost selected on the Checkout page
   shipCost: number;
 };
 
-export default function OrderSummary({ shipCost }: Props) {
-  const total = SUBTOTAL + shipCost;
+export default function OrderSummary({ items, cartTotal, shipCost }: Props) {
+  const itemCount = items.reduce((sum, i) => sum + i.qty, 0);
+  const grandTotal = cartTotal + shipCost;
 
   return (
     <div className="sticky top-20">
@@ -31,40 +28,50 @@ export default function OrderSummary({ shipCost }: Props) {
       <div className="bg-white border border-charcoal/10 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-charcoal/10">
           <span className="font-cormorant text-[1.05rem] font-semibold text-charcoal">Order Summary</span>
-          <Link href="/cart" className="text-[0.68rem] tracking-[0.1em] uppercase text-accent-dark transition-opacity hover:opacity-70"
-            style={{ color: "#a8893e" }}>
+          <Link
+            href="/cart"
+            className="text-[0.68rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70"
+            style={{ color: "#a8893e" }}
+          >
             Edit Cart
           </Link>
         </div>
 
         {/* Items */}
         <div className="px-5 py-4 flex flex-col gap-4">
-          {CART_ITEMS.map((item) => (
-            <div key={item.name} className="flex gap-3 items-center">
-              <div className="relative w-[52px] h-[62px] rounded-lg bg-parchment border border-charcoal/10 flex-shrink-0 flex items-center justify-center">
-                <span className="text-[0.5rem] text-warmgray uppercase tracking-wider text-center leading-tight">
-                  Photo
-                </span>
-                <span className="absolute -top-1.5 -right-1.5 bg-charcoal text-cream text-[0.55rem] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {item.qty}
-                </span>
+          {items.length === 0 ? (
+            <p className="text-[0.82rem] text-warmgray text-center py-4">
+              Your cart is empty.
+            </p>
+          ) : (
+            items.map((item) => (
+              <div key={item.id} className="flex gap-3 items-center">
+                {/* Image placeholder — product images will be added when available */}
+                <div className="relative w-[52px] h-[62px] rounded-lg bg-parchment border border-charcoal/10 flex-shrink-0 flex items-center justify-center">
+                  <span className="text-[0.5rem] text-warmgray uppercase tracking-wider text-center leading-tight">
+                    Photo
+                  </span>
+                  <span className="absolute -top-1.5 -right-1.5 bg-charcoal text-cream text-[0.55rem] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {item.qty}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[0.82rem] text-charcoal leading-snug">{item.name}</div>
+                  <div className="text-[0.7rem] text-muted mt-0.5">{item.meta}</div>
+                </div>
+                <div className="font-cormorant text-[1rem] font-semibold text-charcoal whitespace-nowrap ml-auto">
+                  {fmt(item.price * item.qty)}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[0.82rem] text-charcoal leading-snug">{item.name}</div>
-                <div className="text-[0.7rem] text-muted mt-0.5">{item.meta}</div>
-              </div>
-              <div className="font-cormorant text-[1rem] font-semibold text-charcoal whitespace-nowrap ml-auto">
-                {fmt(item.price)}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Totals */}
         <div className="px-5 py-4 border-t border-charcoal/10 flex flex-col gap-2">
           <div className="flex justify-between text-[0.82rem] text-muted">
-            <span>Subtotal ({ITEM_COUNT} items)</span>
-            <span>{fmt(SUBTOTAL)}</span>
+            <span>Subtotal ({itemCount} item{itemCount !== 1 ? "s" : ""})</span>
+            <span>{fmt(cartTotal)}</span>
           </div>
           <div className="flex justify-between text-[0.82rem] text-muted">
             <span>Shipping</span>
@@ -72,7 +79,7 @@ export default function OrderSummary({ shipCost }: Props) {
           </div>
           <div className="flex justify-between font-cormorant text-[1.2rem] font-semibold text-charcoal pt-2 border-t border-charcoal/10 mt-1">
             <span>Total</span>
-            <span>{fmt(total)}</span>
+            <span>{fmt(grandTotal)}</span>
           </div>
         </div>
       </div>
