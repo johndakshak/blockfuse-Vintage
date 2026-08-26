@@ -1,9 +1,9 @@
 // app/lib/checkout.ts
 //
-// This file contains the API function for the Checkout feature.
+// This file contains the API functions for the Checkout and Payment features.
 // Responsibility: make the HTTP request, return the data (or throw an error).
 //
-// The Checkout page calls this function — it does NOT call fetch() itself.
+// The Checkout page calls these functions — it does NOT call fetch() itself.
 // This follows the same pattern as auth.ts, cart.ts, and products.ts.
 //
 // Pattern:
@@ -55,6 +55,29 @@ export type CheckoutErrorResponse = {
   reason?: string;
 };
 
+// ─── Payment types ────────────────────────────────────────────────────────────
+
+// The Paystack initialisation data returned inside POST /payment/:id
+export type PaystackInitData = {
+  authorization_url: string;
+  access_code: string;
+  reference: string;
+};
+
+// The full response from POST /payment/:id on success
+export type PaymentResponse = {
+  success: true;
+  msg: string;
+  data: PaystackInitData;
+};
+
+// Error shape from POST /payment/:id
+export type PaymentErrorResponse = {
+  success: false;
+  msg: string;
+  reason?: string;
+};
+
 // ─── Checkout ─────────────────────────────────────────────────────────────────
 //
 // Calls POST /checkout.
@@ -87,6 +110,13 @@ export async function checkout(token: string): Promise<CheckoutResponse> {
     },
   });
 
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
   const data: CheckoutResponse | CheckoutErrorResponse = await response.json();
 
   if (!data.success) {
@@ -100,4 +130,55 @@ export async function checkout(token: string): Promise<CheckoutResponse> {
   }
 
   return data as CheckoutResponse;
+}
+
+// ─── Initialize Payment ───────────────────────────────────────────────────────
+//
+// Calls POST /payment/:orderId to initialize a Paystack payment for the given order.
+//
+// IMPORTANT (from OpenAPI):
+//   - The :id is the ORDER ID returned by POST /checkout — not a cart ID or product ID.
+//   - No request body is sent. The backend derives all details from the JWT and order record.
+//   - The order must belong to the authenticated user and must be in PENDING status.
+//
+// On success, returns Paystack's authorization_url which the browser should be
+// redirected to so the user can complete payment on Paystack's hosted page.
+//
+// Throws an Error if:
+//   - the order is not found (404)
+//   - the order does not belong to the user (403)
+//   - the order is not in PENDING status (409)
+//   - unauthenticated (401)
+//   - the server returns a non-JSON response (cold start / 502)
+
+export async function initializePayment(
+  orderId: number,
+  token: string
+): Promise<PaymentResponse> {
+  const response = await fetch(`${API_URL}/payment/${orderId}`, {
+    method: "POST",
+    headers: {
+      // No Content-Type needed — no request body is sent
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: PaymentResponse | PaymentErrorResponse = await response.json();
+
+  if (!data.success) {
+    const err = data as PaymentErrorResponse;
+    const message = err.reason
+      ? `${err.msg} — ${err.reason}`
+      : err.msg || "Payment initialization failed.";
+    throw new Error(message);
+  }
+
+  return data as PaymentResponse;
 }
