@@ -87,6 +87,13 @@ export async function loginUser(email: string, password: string): Promise<LoginR
     handleNetworkError(err, "POST /login");
   }
 
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
   const data: LoginResponse | ErrorResponse = await response.json();
 
   // If the backend says success is false, throw so the component can show the error
@@ -122,6 +129,13 @@ export async function registerUser(
     handleNetworkError(err, "POST /users/create");
   }
 
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
   const data: RegisterResponse | ErrorResponse = await response.json();
 
   if (!data.success) {
@@ -143,6 +157,13 @@ export async function getCurrentUser(token: string): Promise<MeResponse> {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
 
   const data: MeResponse | ErrorResponse = await response.json();
 
