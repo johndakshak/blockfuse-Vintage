@@ -49,19 +49,43 @@ export type ErrorResponse = {
   msg: string;
 };
 
+// ─── Network error helper ─────────────────────────────────────────────────────
+
+// fetch() itself throws a TypeError ("Failed to fetch") when it cannot reach the
+// server at all — CORS preflight failure, DNS error, network offline, or the
+// server is down (e.g. Render free-tier cold start timeout).
+// This helper converts that low-level error into a message the user can act on.
+function handleNetworkError(err: unknown, context: string): never {
+  // Log the real error to the console for debugging purposes
+  console.error(`[auth] Network error during ${context}:`, err);
+
+  // Throw a friendly message instead of exposing "TypeError: Failed to fetch"
+  throw new Error(
+    "Unable to connect to the server. Please check your connection and try again."
+  );
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 // Calls POST /login with email and password.
 // Returns the access_token on success.
 // Throws an Error with the backend's error message on failure.
+// Throws a friendly network error if fetch() itself fails (server unreachable).
 export async function loginUser(email: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_URL}/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (err) {
+    // fetch() threw — network-level failure (server down, CORS, DNS, etc.)
+    handleNetworkError(err, "POST /login");
+  }
 
   const data: LoginResponse | ErrorResponse = await response.json();
 
@@ -83,13 +107,20 @@ export async function registerUser(
   email: string,
   password: string
 ): Promise<RegisterResponse> {
-  const response = await fetch(`${API_URL}/users/create`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name, email, password }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}/users/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name, email, password }),
+    });
+  } catch (err) {
+    // fetch() threw — network-level failure (server down, CORS, DNS, etc.)
+    handleNetworkError(err, "POST /users/create");
+  }
 
   const data: RegisterResponse | ErrorResponse = await response.json();
 
