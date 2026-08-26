@@ -249,3 +249,128 @@ export async function getOrders(token: string): Promise<GetOrdersResponse> {
 
   return data as GetOrdersResponse;
 }
+
+// ─── Get All Orders (Admin) ───────────────────────────────────────────────────
+
+// The full response from GET /orders (admin endpoint) on success
+export type GetAllOrdersResponse = {
+  success: true;
+  msg: string;
+  data: Order[];
+};
+
+// Error shape from GET /orders
+export type GetAllOrdersErrorResponse = {
+  success: false;
+  msg: string;
+};
+
+// Calls GET /orders — admin only, requires Bearer token with ADMIN role.
+//
+// Returns every order in the system, each with nested items and product details.
+// Returns an empty array if no orders exist (treats 400/404 as empty).
+//
+// Throws an Error if:
+//   - unauthenticated (401)
+//   - not an admin (403)
+//   - the server returns a non-JSON response (cold start / 502)
+
+export async function getAdminOrders(token: string): Promise<GetAllOrdersResponse> {
+  const response = await fetch(`${API_URL}/orders`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: GetAllOrdersResponse | GetAllOrdersErrorResponse = await response.json();
+
+  if (!data.success) {
+    if (response.status === 400 || response.status === 404) {
+      return { success: true, msg: "No orders found", data: [] };
+    }
+    throw new Error(
+      (data as GetAllOrdersErrorResponse).msg || "Could not load orders."
+    );
+  }
+
+  return data as GetAllOrdersResponse;
+}
+
+// ─── Update Order Status (Admin) ──────────────────────────────────────────────
+
+// The valid status values from the OpenAPI OrderStatus enum
+export type OrderStatus = Order["status"];
+
+// Response from PATCH /order/status/:id on success
+export type UpdateOrderStatusResponse = {
+  success: true;
+  msg: string;
+  data: Order;
+};
+
+// Error shape from PATCH /order/status/:id
+export type UpdateOrderStatusErrorResponse = {
+  success: false;
+  msg: string;
+};
+
+// Calls PATCH /order/status/:id — admin only, requires Bearer token with ADMIN role.
+//
+// Request body: { status: OrderStatus } — JSON
+//
+// Valid transitions (from OpenAPI spec):
+//   PENDING    → PROCESSING | CANCELLED
+//   PROCESSING → SHIPPED    | CANCELLED
+//   SHIPPED    → DELIVERED
+//   DELIVERED  → (terminal — no further transitions)
+//   CANCELLED  → (terminal — no further transitions)
+//
+// Returns the updated Order on success.
+//
+// Throws an Error if:
+//   - invalid or disallowed status transition (409)
+//   - order not found (404)
+//   - unauthenticated (401)
+//   - not an admin (403)
+//   - server returns a non-JSON response (cold start / 502)
+
+export async function updateOrderStatus(
+  orderId: number,
+  status: OrderStatus,
+  token: string
+): Promise<UpdateOrderStatusResponse> {
+  const response = await fetch(`${API_URL}/order/status/${orderId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status }),
+  });
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: UpdateOrderStatusResponse | UpdateOrderStatusErrorResponse =
+    await response.json();
+
+  if (!data.success) {
+    throw new Error(
+      (data as UpdateOrderStatusErrorResponse).msg || "Could not update order status."
+    );
+  }
+
+  return data as UpdateOrderStatusResponse;
+}
