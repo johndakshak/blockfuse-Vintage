@@ -173,3 +173,52 @@ export async function getCurrentUser(token: string): Promise<MeResponse> {
 
   return data as MeResponse;
 }
+
+// ─── Get All Users (Admin) ────────────────────────────────────────────────────
+
+// What the backend sends back when GET /users succeeds
+export type GetUsersResponse = {
+  success: true;
+  msg: string;
+  data: User[];
+};
+
+// Error shape from GET /users
+export type GetUsersErrorResponse = {
+  success: false;
+  msg: string;
+};
+
+// Calls GET /users — admin only, requires Bearer token with ADMIN role.
+// Returns a list of all registered users.
+//
+// Throws an Error if:
+//   - unauthenticated (401)
+//   - not an admin (403)
+//   - the server returns a non-JSON response (cold start / 502)
+
+export async function getAdminUsers(token: string): Promise<GetUsersResponse> {
+  const response = await fetch(`${API_URL}/users`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: GetUsersResponse | GetUsersErrorResponse = await response.json();
+
+  if (!data.success) {
+    throw new Error(
+      (data as GetUsersErrorResponse).msg || "Could not load customers."
+    );
+  }
+
+  return data as GetUsersResponse;
+}
