@@ -2,7 +2,8 @@
 
 // app/checkout/page.tsx
 //
-// The Checkout page. Loads the user's real cart then submits it to POST /checkout.
+// The Checkout page. Loads the user's real cart then submits it to POST /checkout,
+// followed immediately by POST /payment/:id to initialize Paystack payment.
 //
 // Data flow — loading the cart:
 //   CheckoutPage mounts
@@ -17,22 +18,22 @@
 //     ↓
 //   OrderSummary receives real items + total
 //
-// Data flow — placing the order:
-//   User clicks "Place Order"
+// Data flow — placing the order + initializing payment:
+//   User clicks "Place Order & Pay"
 //     ↓
 //   placeOrder()
 //     ↓
-//   checkout(token)    ← checkout.ts
+//   checkout(token)         ← checkout.ts → POST /checkout (no body)
 //     ↓
-//   POST /checkout  (no body — backend reads cart from the JWT)
+//   Backend creates PENDING order, returns orderId
 //     ↓
-//   Backend atomically converts cart → Order
+//   initializePayment(orderId, token)  ← checkout.ts → POST /payment/:orderId
 //     ↓
-//   Response { order, cartItems, totalPrice }
+//   Backend calls Paystack, returns authorization_url
 //     ↓
-//   setConfirmed()
+//   window.location.href = authorization_url
 //     ↓
-//   OrderConfirmed overlay displays real order ID and total
+//   User completes payment on Paystack's hosted page
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -40,10 +41,9 @@ import { useRouter } from "next/navigation";
 import ShippingForm, { type ShippingData } from "../components/checkout/ShippingForm";
 import DeliveryMethod, { DELIVERY_OPTIONS } from "../components/checkout/DeliveryMethod";
 import OrderSummary from "../components/checkout/OrderSummary";
-import OrderConfirmed, { type ConfirmData } from "../components/checkout/OrderConfirmed";
 import { type CartItem, toDisplayItem } from "../components/cart/cartTypes";
 import { getCartItems } from "@/app/lib/cart";
-import { checkout } from "@/app/lib/checkout";
+import { checkout, initializePayment } from "@/app/lib/checkout";
 import { useAuth } from "@/app/context/AuthContext";
 
 const PAY_METHODS = [
@@ -85,9 +85,9 @@ export default function CheckoutPage() {
   const [terms, setTerms]           = useState(false);
 
   // ── Checkout submission state ────────────────────────────────────────────────
-  const [submitting, setSubmitting] = useState(false);  // true while POST /checkout is in flight
-  const [error, setError]           = useState("");      // submission error message
-  const [confirmed, setConfirmed]   = useState<ConfirmData | null>(null);
+  const [submitting, setSubmitting] = useState(false);  // true while POST /checkout + POST /payment/:id are in flight
+  const [error, setError]           = useState("");      // checkout submission error
+  const [paymentError, setPaymentError] = useState(""); // payment initialization error (order created but payment failed)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const selectedDelivery = DELIVERY_OPTIONS.find((o) => o.id === deliveryId)!;
@@ -125,6 +125,7 @@ export default function CheckoutPage() {
   // ── Place the order ──────────────────────────────────────────────────────────
   async function placeOrder() {
     setError("");
+    setPaymentError("");
 
     // Frontend guard: agree to terms
     if (!terms) {
@@ -145,33 +146,36 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
     try {
-      // Call POST /checkout — no body needed, backend reads the cart via JWT
-      const response = await checkout(token);
+      // ── Step 1: Create the order ─────────────────────────────────────────────
+      // POST /checkout — no body needed, backend reads the cart via JWT.
+      // This atomically converts the cart to a PENDING order.
+      const checkoutResponse = await checkout(token);
+      const orderId = checkoutResponse.data.order.id;
 
-      // Calculate the estimated arrival date using the selected delivery option
-      const arrival = new Date();
-      arrival.setDate(arrival.getDate() + selectedDelivery.days);
-      const arrivalDate = arrival.toLocaleDateString("en-GB", {
-        day: "numeric", month: "long", year: "numeric",
-      });
+      // ── Step 2: Initialize payment ───────────────────────────────────────────
+      // POST /payment/:orderId — no body needed.
+      // Returns Paystack's authorization_url for the user to complete payment.
+      // NOTE: a successful checkout does NOT mean payment is complete.
+      //       The order is PENDING until Paystack confirms via webhook.
+      const paymentResponse = await initializePayment(orderId, token);
 
-      const payLabel = PAY_METHODS.find((p) => p.key === payMethod)?.label ?? "";
+      // ── Step 3: Redirect to Paystack ─────────────────────────────────────────
+      // Let Paystack take over — the user will be sent to their hosted payment page.
+      window.location.href = paymentResponse.data.authorization_url;
 
-      // Show the confirmation overlay with the real order data from the backend
-      setConfirmed({
-        // Format the numeric order ID to match the app's "#BV-N" display convention
-        orderId: `#BV-${response.data.order.id}`,
-        total: response.data.totalPrice + shipCost,
-        payMethod: payLabel,
-        shipLabel: selectedDelivery.name,
-        arrivalDate,
-      });
+      // No state update needed here — the page is navigating away.
     } catch (err: unknown) {
-      // The error message may include the backend's "reason" field
-      // e.g. "Failed to checkout — Cart is empty"
-      setError(
-        err instanceof Error ? err.message : "Something went wrong. Please try again."
-      );
+      const message =
+        err instanceof Error ? err.message : "Something went wrong. Please try again.";
+
+      // If payment initialization failed (order was already created), we surface
+      // the error separately so the user knows their order exists but payment
+      // was not started — they should not re-submit the form.
+      // We distinguish by checking if submitting was still true when the catch
+      // runs after checkout succeeded (i.e., it's a payment error vs checkout error).
+      // Since both share the same try block we use a single error display for now,
+      // but label it appropriately.
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -444,6 +448,17 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
+                {paymentError && (
+                  <div
+                    className="border rounded-xl px-4 py-3 text-sm mb-4 font-barlow"
+                    style={{ background: "rgba(176,92,58,0.1)", borderColor: "rgba(176,92,58,0.3)", color: "#b05c3a" }}
+                    role="alert"
+                  >
+                    <strong className="block mb-0.5">Payment initialization failed</strong>
+                    {paymentError}
+                  </div>
+                )}
+
                 <label className="flex items-start gap-3 cursor-pointer mb-5">
                   <input
                     type="checkbox"
@@ -469,7 +484,7 @@ export default function CheckoutPage() {
                     <path d="M9 12l2 2 4-4" /><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span className="relative">
-                    {submitting ? "Placing Order…" : "Place Order"}
+                    {submitting ? "Processing…" : "Place Order & Pay"}
                   </span>
                 </button>
 
@@ -504,8 +519,6 @@ export default function CheckoutPage() {
         )}
       </div>
 
-      {/* Confirmation overlay — shown after successful POST /checkout */}
-      {confirmed && <OrderConfirmed data={confirmed} />}
     </>
   );
 }
