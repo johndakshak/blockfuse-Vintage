@@ -80,6 +80,12 @@ export default function Navbar() {
                         <span className="text-[0.68rem] tracking-[0.18em] uppercase text-charcoal font-barlow">
                             Hi, {user.name.split(" ")[0]}
                         </span>
+                        <Link
+                            href="/orders"
+                            className="hidden md:inline-flex text-[0.68rem] tracking-[0.18em] uppercase text-charcoal no-underline hover:text-accent transition-colors duration-200 font-barlow"
+                        >
+                            Orders
+                        </Link>
                         <button
                             onClick={handleLogout}
                             className="text-[0.68rem] tracking-[0.18em] uppercase text-charcoal border border-charcoal/30 px-4 py-2 hover:bg-charcoal hover:text-cream transition-all duration-200 cursor-pointer"

@@ -28,13 +28,26 @@ export type Order = {
   updatedAt: string;
 };
 
-// Each item line inside the Order
+// Each item line inside the Order.
+// The OpenAPI OrderItem schema includes a nested product object
+// which is used to display product names in the order history.
 export type OrderItem = {
   id: number;
   orderId: number;
   productId: number;
   quantity: number;
-  price: number;
+  price: number;           // unit price at time of order
+  product?: {              // nested product details (present on GET /order items)
+    id: number;
+    name: string;
+    imageUrl: string;
+    description: string | null;
+    price: number;
+    stock: number;
+    createdBy: number;
+    createdAt: string;
+    updatedAt: string;
+  };
 };
 
 // The full response from POST /checkout on success
@@ -181,4 +194,58 @@ export async function initializePayment(
   }
 
   return data as PaymentResponse;
+}
+
+// ─── Get User Orders ──────────────────────────────────────────────────────────
+
+// The full response from GET /order on success
+export type GetOrdersResponse = {
+  success: true;
+  msg: string;
+  data: Order[];
+};
+
+// Error shape from GET /order
+export type GetOrdersErrorResponse = {
+  success: false;
+  msg: string;
+};
+
+// Calls GET /order to retrieve all orders for the authenticated user.
+//
+// Returns an array of orders, each with nested items and product details.
+// Returns an empty array if the user has no orders (treats 404 as empty).
+//
+// Throws an Error if:
+//   - unauthenticated (401)
+//   - the server returns a non-JSON response (cold start / 502)
+
+export async function getOrders(token: string): Promise<GetOrdersResponse> {
+  const response = await fetch(`${API_URL}/order`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: GetOrdersResponse | GetOrdersErrorResponse = await response.json();
+
+  // The backend may return 400/404 if there are no orders — treat as empty list
+  if (!data.success) {
+    if (response.status === 400 || response.status === 404) {
+      return { success: true, msg: "No orders found", data: [] };
+    }
+    throw new Error(
+      (data as GetOrdersErrorResponse).msg || "Could not load orders."
+    );
+  }
+
+  return data as GetOrdersResponse;
 }
