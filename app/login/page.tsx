@@ -7,8 +7,49 @@ import BrandPanel from "../components/auth/BrandPanel";
 import { loginUser } from "@/app/lib/auth";
 import { useAuth } from "@/app/context/AuthContext";
 
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+// The shape of our field-level errors object.
+// Each key matches a form field; the value is the error message (or empty string).
+type LoginFormErrors = {
+  email: string;
+  password: string;
+};
+
+// validateLoginForm checks the form values and returns an errors object.
+// If every field is valid, all values will be empty strings.
+// This runs BEFORE the API request is made.
+function validateLoginForm(email: string, password: string): LoginFormErrors {
+  const errors: LoginFormErrors = { email: "", password: "" };
+
+  // Email: required + basic format check
+  if (!email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  // Password: required only (the backend validates strength on registration;
+  // on login we just need something to send)
+  if (!password) {
+    errors.password = "Password is required.";
+  }
+
+  return errors;
+}
+
+// Returns true if the errors object has no messages (all fields are valid).
+function isFormValid(errors: LoginFormErrors): boolean {
+  return Object.values(errors).every((msg) => msg === "");
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  // formErrors holds field-level validation messages
+  const [formErrors, setFormErrors] = useState<LoginFormErrors>({ email: "", password: "" });
+  // error holds the top-level banner message (backend error or network error)
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,33 +62,42 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
-    // Read the email and password values from the form
+    // Read values from the form
     const form = e.currentTarget;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
+    // ── Step 1: Validate before calling the backend ───────────────────────────
+    const errors = validateLoginForm(email, password);
+    setFormErrors(errors);
+
+    // If validation failed, stop here — do NOT call the API
+    if (!isFormValid(errors)) {
+      return;
+    }
+
+    // ── Step 2: Validation passed — call the backend ──────────────────────────
+    setLoading(true);
+
     try {
-      // Step 1: Call POST /login on the backend
-      // loginUser() returns { success, msg, access_token } on success
-      // or throws an Error with the backend's error message on failure
+      // loginUser() returns { success, msg, access_token } on success,
+      // throws a friendly Error on backend error (400/404) or network failure
       const response = await loginUser(email, password);
 
-      // Step 2: Save the token and fetch the user profile via GET /me
-      // login() is from AuthContext — it stores the token in localStorage
-      // and sets the user in global state
+      // Save token + fetch user profile via GET /me
       await login(response.access_token);
 
-      // Step 3: Redirect to the homepage
+      // Redirect to the homepage
       router.push("/");
     } catch (err: unknown) {
-      // Show the error message (e.g. "Invalid email or password")
-      setError(err instanceof Error ? err.message : "Invalid email or password.");
+      // Show backend or network error in the banner
+      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
   }
+
 
   return (
     <section className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
@@ -143,11 +193,20 @@ export default function LoginPage() {
                 type="email"
                 id="email"
                 name="email"
-                required
                 autoComplete="email"
                 placeholder="margaret@example.com"
-                className="w-full bg-white border border-charcoal/15 rounded-xl px-4 py-3.5 text-sm font-barlow font-light text-charcoal placeholder-warmgray transition-all duration-200 outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgba(200,169,110,0.15)]"
+                aria-describedby={formErrors.email ? "email-error" : undefined}
+                className={`w-full bg-white border rounded-xl px-4 py-3.5 text-sm font-barlow font-light text-charcoal placeholder-warmgray transition-all duration-200 outline-none focus:shadow-[0_0_0_3px_rgba(200,169,110,0.15)] ${
+                  formErrors.email
+                    ? "border-[#b05c3a] focus:border-[#b05c3a]"
+                    : "border-charcoal/15 focus:border-accent"
+                }`}
               />
+              {formErrors.email && (
+                <p id="email-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                  {formErrors.email}
+                </p>
+              )}
             </div>
 
             {/* Password */}
@@ -171,10 +230,14 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   id="password"
                   name="password"
-                  required
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="w-full bg-white border border-charcoal/15 rounded-xl px-4 py-3.5 pr-12 text-sm font-barlow font-light text-charcoal placeholder-warmgray transition-all duration-200 outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgba(200,169,110,0.15)]"
+                  aria-describedby={formErrors.password ? "password-error" : undefined}
+                  className={`w-full bg-white border rounded-xl px-4 py-3.5 pr-12 text-sm font-barlow font-light text-charcoal placeholder-warmgray transition-all duration-200 outline-none focus:shadow-[0_0_0_3px_rgba(200,169,110,0.15)] ${
+                    formErrors.password
+                      ? "border-[#b05c3a] focus:border-[#b05c3a]"
+                      : "border-charcoal/15 focus:border-accent"
+                  }`}
                 />
                 <button
                   type="button"
@@ -194,6 +257,11 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
+              {formErrors.password && (
+                <p id="password-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                  {formErrors.password}
+                </p>
+              )}
             </div>
 
             {/* Remember me */}

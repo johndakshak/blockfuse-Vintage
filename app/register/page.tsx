@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import BrandPanel from "../components/auth/BrandPanel";
 import { registerUser } from "@/app/lib/auth";
 
+// ─── Password strength meter ──────────────────────────────────────────────────
+
 type StrengthLevel = {
   pct: string;
   color: string;
@@ -29,6 +31,96 @@ function getStrength(val: string): StrengthLevel {
   return strengthLevels[score];
 }
 
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+// The shape of our field-level errors object.
+type RegisterFormErrors = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  terms: string;
+};
+
+// validateRegisterForm checks all fields and returns an errors object.
+// Password requirements match the backend:
+//   - min 8 characters
+//   - at least one uppercase letter
+//   - at least one lowercase letter
+//   - at least one number
+//   - at least one symbol
+function validateRegisterForm(
+  firstName: string,
+  lastName: string,
+  email: string,
+  password: string,
+  confirmPassword: string,
+  terms: boolean
+): RegisterFormErrors {
+  const errors: RegisterFormErrors = {
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    terms: "",
+  };
+
+  // First name: required
+  if (!firstName.trim()) {
+    errors.firstName = "First name is required.";
+  }
+
+  // Last name: required
+  if (!lastName.trim()) {
+    errors.lastName = "Last name is required.";
+  }
+
+  // Email: required + format
+  if (!email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  // Password: required + backend rules
+  if (!password) {
+    errors.password = "Password is required.";
+  } else if (password.length < 8) {
+    errors.password = "Password must be at least 8 characters.";
+  } else if (!/[A-Z]/.test(password)) {
+    errors.password = "Password must include at least one uppercase letter.";
+  } else if (!/[a-z]/.test(password)) {
+    errors.password = "Password must include at least one lowercase letter.";
+  } else if (!/[0-9]/.test(password)) {
+    errors.password = "Password must include at least one number.";
+  } else if (!/[^A-Za-z0-9]/.test(password)) {
+    errors.password = "Password must include at least one symbol (e.g. !@#$%).";
+  }
+
+  // Confirm password: required + must match
+  if (!confirmPassword) {
+    errors.confirmPassword = "Please confirm your password.";
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  // Terms: must be checked
+  if (!terms) {
+    errors.terms = "Please agree to the Terms and Privacy Policy.";
+  }
+
+  return errors;
+}
+
+// Returns true if the errors object has no messages.
+function isFormValid(errors: RegisterFormErrors): boolean {
+  return Object.values(errors).every((msg) => msg === "");
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
 const EyeOpen = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -42,13 +134,28 @@ const EyeClosed = () => (
   </svg>
 );
 
-const inputClass =
-  "w-full bg-white border border-charcoal/15 rounded-xl px-4 py-3.5 text-sm font-barlow font-light text-charcoal placeholder-warmgray transition-all duration-200 outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgba(200,169,110,0.15)]";
+// ─── Shared input class ───────────────────────────────────────────────────────
+
+// Accepts an optional hasError boolean to apply error styling
+function inputCls(hasError = false) {
+  return `w-full bg-white border rounded-xl px-4 py-3.5 text-sm font-barlow font-light text-charcoal placeholder-warmgray transition-all duration-200 outline-none focus:shadow-[0_0_0_3px_rgba(200,169,110,0.15)] ${
+    hasError
+      ? "border-[#b05c3a] focus:border-[#b05c3a]"
+      : "border-charcoal/15 focus:border-accent"
+  }`;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword]        = useState(false);
   const [showConfirm, setShowConfirm]          = useState(false);
   const [password, setPassword]                = useState("");
+  // formErrors holds field-level validation messages
+  const [formErrors, setFormErrors]            = useState<RegisterFormErrors>({
+    firstName: "", lastName: "", email: "", password: "", confirmPassword: "", terms: "",
+  });
+  // error holds the top-level banner message (backend error or network error)
   const [error, setError]                      = useState("");
   const [loading, setLoading]                  = useState(false);
 
@@ -68,33 +175,30 @@ export default function RegisterPage() {
     const confirmPwd  = (form.elements.namedItem("confirmPassword") as HTMLInputElement).value;
     const terms       = (form.elements.namedItem("terms")           as HTMLInputElement).checked;
 
-    // ── Frontend validations ──────────────────────────────────────────────────
+    // ── Step 1: Validate before calling the backend ───────────────────────────
+    const errors = validateRegisterForm(firstName, lastName, email, password, confirmPwd, terms);
+    setFormErrors(errors);
 
-    if (password !== confirmPwd) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (!terms) {
-      setError("Please agree to the Terms and Privacy Policy.");
+    // If validation failed, stop here — do NOT call the API
+    if (!isFormValid(errors)) {
       return;
     }
 
-    // The backend expects a single "name" field.
-    // We combine the first and last name from the form.
+    // ── Step 2: Validation passed — call the backend ──────────────────────────
+    // The backend expects a single "name" field — combine first + last name.
     const fullName = `${firstName} ${lastName}`.trim();
 
     setLoading(true);
     try {
-      // Step 1: Call POST /users/create on the backend
-      // registerUser() returns { success, msg, data: { name, email } } on success
-      // or throws an Error with the backend's error message on failure
+      // registerUser() returns { success, msg, data: { name, email } } on success,
+      // throws a friendly Error on backend error or network failure
       await registerUser(fullName, email, password);
 
-      // Step 2: Registration succeeded — send the user to the login page.
+      // Registration succeeded — send the user to the login page.
       // Registration does not return a token; they need to log in separately.
       router.push("/login");
     } catch (err: unknown) {
-      // Show the error message (e.g. "Email already exists" or weak password)
+      // Show backend or network error in the banner
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
@@ -182,9 +286,15 @@ export default function RegisterPage() {
                 </label>
                 <input
                   type="text" id="firstName" name="firstName"
-                  required autoComplete="given-name" placeholder="Margaret"
-                  className={inputClass}
+                  autoComplete="given-name" placeholder="Margaret"
+                  aria-describedby={formErrors.firstName ? "firstName-error" : undefined}
+                  className={inputCls(!!formErrors.firstName)}
                 />
+                {formErrors.firstName && (
+                  <p id="firstName-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                    {formErrors.firstName}
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="lastName" className="block text-[0.68rem] font-barlow tracking-[0.2em] uppercase text-warmgray mb-1.5">
@@ -192,9 +302,15 @@ export default function RegisterPage() {
                 </label>
                 <input
                   type="text" id="lastName" name="lastName"
-                  required autoComplete="family-name" placeholder="Holloway"
-                  className={inputClass}
+                  autoComplete="family-name" placeholder="Holloway"
+                  aria-describedby={formErrors.lastName ? "lastName-error" : undefined}
+                  className={inputCls(!!formErrors.lastName)}
                 />
+                {formErrors.lastName && (
+                  <p id="lastName-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                    {formErrors.lastName}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -206,9 +322,15 @@ export default function RegisterPage() {
                 </label>
                 <input
                   type="email" id="email" name="email"
-                  required autoComplete="email" placeholder="margaret@example.com"
-                  className={inputClass}
+                  autoComplete="email" placeholder="margaret@example.com"
+                  aria-describedby={formErrors.email ? "email-error" : undefined}
+                  className={inputCls(!!formErrors.email)}
                 />
+                {formErrors.email && (
+                  <p id="email-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                    {formErrors.email}
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="phone" className="block text-[0.68rem] font-barlow tracking-[0.2em] uppercase text-warmgray mb-1.5">
@@ -217,7 +339,7 @@ export default function RegisterPage() {
                 <input
                   type="tel" id="phone" name="phone"
                   autoComplete="tel" placeholder="+1 (555) 000-0000"
-                  className={inputClass}
+                  className={inputCls()}
                 />
               </div>
             </div>
@@ -231,10 +353,11 @@ export default function RegisterPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   id="password" name="password"
-                  required autoComplete="new-password" placeholder="••••••••"
+                  autoComplete="new-password" placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`${inputClass} pr-12`}
+                  aria-describedby={formErrors.password ? "password-error" : undefined}
+                  className={`${inputCls(!!formErrors.password)} pr-12`}
                 />
                 <button
                   type="button"
@@ -259,6 +382,11 @@ export default function RegisterPage() {
                   </p>
                 </>
               )}
+              {formErrors.password && (
+                <p id="password-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                  {formErrors.password}
+                </p>
+              )}
             </div>
 
             {/* Confirm Password */}
@@ -270,8 +398,9 @@ export default function RegisterPage() {
                 <input
                   type={showConfirm ? "text" : "password"}
                   id="confirmPassword" name="confirmPassword"
-                  required autoComplete="new-password" placeholder="••••••••"
-                  className={`${inputClass} pr-12`}
+                  autoComplete="new-password" placeholder="••••••••"
+                  aria-describedby={formErrors.confirmPassword ? "confirmPassword-error" : undefined}
+                  className={`${inputCls(!!formErrors.confirmPassword)} pr-12`}
                 />
                 <button
                   type="button"
@@ -282,25 +411,37 @@ export default function RegisterPage() {
                   {showConfirm ? <EyeClosed /> : <EyeOpen />}
                 </button>
               </div>
+              {formErrors.confirmPassword && (
+                <p id="confirmPassword-error" className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                  {formErrors.confirmPassword}
+                </p>
+              )}
             </div>
 
             {/* Terms checkbox */}
-            <label className="flex items-start gap-2.5 cursor-pointer select-none pt-1">
-              <input
-                type="checkbox" name="terms"
-                required className="w-4 h-4 cursor-pointer rounded mt-0.5 flex-shrink-0 accent-accent"
-              />
-              <span className="text-sm font-barlow font-light text-muted leading-relaxed">
-                I agree to the{" "}
-                <Link href="/terms" className="text-accent hover:text-rust transition-colors hover:underline underline-offset-2">
-                  Terms of Use
-                </Link>
-                {" "}and{" "}
-                <Link href="/privacy" className="text-accent hover:text-rust transition-colors hover:underline underline-offset-2">
-                  Privacy Policy
-                </Link>
-              </span>
-            </label>
+            <div>
+              <label className="flex items-start gap-2.5 cursor-pointer select-none pt-1">
+                <input
+                  type="checkbox" name="terms"
+                  className="w-4 h-4 cursor-pointer rounded mt-0.5 flex-shrink-0 accent-accent"
+                />
+                <span className="text-sm font-barlow font-light text-muted leading-relaxed">
+                  I agree to the{" "}
+                  <Link href="/terms" className="text-accent hover:text-rust transition-colors hover:underline underline-offset-2">
+                    Terms of Use
+                  </Link>
+                  {" "}and{" "}
+                  <Link href="/privacy" className="text-accent hover:text-rust transition-colors hover:underline underline-offset-2">
+                    Privacy Policy
+                  </Link>
+                </span>
+              </label>
+              {formErrors.terms && (
+                <p className="mt-1.5 text-xs font-barlow" style={{ color: "#b05c3a" }}>
+                  {formErrors.terms}
+                </p>
+              )}
+            </div>
 
             {/* Submit */}
             <button
