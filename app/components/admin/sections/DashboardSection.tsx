@@ -1,7 +1,42 @@
-import { ORDERS, orderStatusBadge, payStatusBadge } from "../adminData";
+'use client'
+
+// app/components/admin/sections/DashboardSection.tsx
+//
+// The main admin dashboard.
+//
+// The Recent Orders table previously used hardcoded mock data from adminData.ts.
+// It now fetches real orders from GET /orders via getAdminOrders().
+//
+// Data flow — Recent Orders:
+//   DashboardSection mounts
+//     ↓
+//   useEffect → getAdminOrders(token)   ← app/lib/checkout.ts
+//     ↓
+//   GET /orders  (admin only)
+//     ↓
+//   setRecentOrders()
+//     ↓
+//   5 most recent real orders render
+//
+// All other dashboard widgets (stat cards, revenue chart, categories) remain
+// unchanged — they have no backend support yet and are out of scope.
+//
+// NOTE: GET /orders returns userId (a number), not the customer's name.
+// The Customer column therefore shows "User #N". No additional GET /users/:id
+// calls are made — that would be N extra requests per page load.
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/context/AuthContext";
+import { getAdminOrders, type Order, type OrderStatus } from "@/app/lib/checkout";
+import { AuthError } from "@/app/lib/auth";
+import { fmt } from "@/app/components/cart/cartTypes";
 import type { SectionId } from "../Sidebar";
 
-// Shared sub-components
+// ─── Shared sub-components ────────────────────────────────────────────────────
+// These are exported because OrdersSection, ProductsSection, and
+// CustomersSection all import Badge from this file.
+
 export function Badge({ label, className }: { label: string; className: string }) {
   return (
     <span className={`inline-flex items-center text-[0.62rem] font-medium tracking-[0.08em] uppercase px-2 py-0.5 rounded-full ${className}`}>
@@ -42,10 +77,13 @@ export function ViewBtn() {
   );
 }
 
+// ─── Shared table class constants ─────────────────────────────────────────────
+
 const thClass = "text-[0.62rem] font-medium tracking-[0.18em] uppercase text-warmgray px-5 py-3 text-left bg-[#f4f2ee] border-b border-charcoal/[0.09]";
 const tdClass = "px-5 py-3.5 text-[0.83rem] text-charcoal border-b border-charcoal/[0.04]";
 
-// Stats
+// ─── Dashboard stat cards (still mocked — no backend analytics endpoint) ──────
+
 const STATS = [
   { label: "Total Revenue", val: "₦4.2M", sub: "+18.4% this month", up: true,  color: "gold",  icon: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#c8a96e" strokeWidth={1.8}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> },
   { label: "Total Orders",  val: "284",   sub: "+12 new today",     up: true,  color: "green", icon: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#4a9068" strokeWidth={1.8}><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> },
@@ -60,8 +98,12 @@ const colorMap: Record<string, { bar: string; icon: string }> = {
   rust:  { bar: "from-[#8a3a1e] to-[#b05c3a]", icon: "bg-[rgba(176,92,58,0.1)]"   },
 };
 
+// ─── Revenue chart (still mocked — no backend time-series endpoint) ───────────
+
 const CHART_HEIGHTS = [45, 62, 50, 78, 58, 92, 70];
 const CHART_LABELS  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+// ─── Top categories (still mocked — no backend category breakdown endpoint) ───
 
 const CATEGORIES = [
   { name: "Jackets",      amt: "₦1.2M", pct: 82 },
@@ -71,9 +113,78 @@ const CATEGORIES = [
   { name: "Tops",         amt: "₦290K", pct: 20 },
 ];
 
+// ─── Recent Orders — real backend status badge colours ────────────────────────
+// Keyed by the backend's uppercase OrderStatus values.
+// Colours match the conventions used in OrdersSection.tsx.
+
+const recentOrderStatusBadge: Record<OrderStatus, string> = {
+  PENDING:    "bg-[rgba(154,150,144,0.12)] text-[#7a776f]",
+  PROCESSING: "bg-[rgba(200,169,110,0.15)] text-[#a8893e]",
+  SHIPPED:    "bg-[rgba(74,130,184,0.10)]  text-[#3a7ab0]",
+  DELIVERED:  "bg-[rgba(74,144,104,0.10)]  text-[#3a7a5c]",
+  CANCELLED:  "bg-[rgba(176,92,58,0.10)]   text-[#b05c3a]",
+};
+
+// Format an ISO date string to a short readable date: "8 Sep 2026"
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+// Capitalise only the first letter: "PENDING" → "Pending"
+function toLabel(s: string) {
+  return s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+// ─── DashboardSection ─────────────────────────────────────────────────────────
+
 type Props = { onViewAllOrders: () => void };
 
 export default function DashboardSection({ onViewAllOrders }: Props) {
+  const { token, clearAuth } = useAuth();
+  const router = useRouter();
+
+  // ── Recent Orders state ───────────────────────────────────────────────────
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState("");
+
+  // ── Fetch recent orders on mount ──────────────────────────────────────────
+  // Reuses getAdminOrders() from app/lib/checkout.ts — the same function
+  // already used by OrdersSection.tsx. No duplicate fetch logic.
+  useEffect(() => {
+    // token is null while AuthContext is still initialising — wait for it
+    if (token === null) return;
+
+    void (async () => {
+      setOrdersLoading(true);
+      setOrdersError("");
+      try {
+        const res = await getAdminOrders(token);
+        // Sort most recent first, then keep only the top 5 for the widget
+        const sorted = [...res.data].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setRecentOrders(sorted.slice(0, 5));
+      } catch (err: unknown) {
+        // 401 — token expired while the admin was on the dashboard
+        if (err instanceof AuthError) {
+          clearAuth();
+          router.push("/login");
+          return;
+        }
+        setOrdersError(
+          err instanceof Error ? err.message : "Could not load recent orders."
+        );
+      } finally {
+        setOrdersLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div>
       <div className="flex items-start justify-between mb-6">
@@ -86,7 +197,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* ── Stat cards (mocked — no backend analytics endpoint yet) ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {STATS.map((s) => {
           const c = colorMap[s.color];
@@ -109,7 +220,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
         })}
       </div>
 
-      {/* Chart + Categories */}
+      {/* ── Revenue chart + Top categories (both mocked) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mb-4">
         {/* Revenue chart */}
         <div className="bg-white border border-charcoal/[0.09] rounded-xl overflow-hidden">
@@ -161,7 +272,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
         </div>
       </div>
 
-      {/* Recent Orders */}
+      {/* ── Recent Orders — real data from GET /orders ── */}
       <div className="bg-white border border-charcoal/[0.09] rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-charcoal/[0.09]">
           <span className="font-cormorant text-[1rem] font-semibold text-charcoal">Recent Orders</span>
@@ -172,28 +283,81 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
             View All
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                {["Order ID","Customer","Amount","Status","Date"].map((h) => (
-                  <th key={h} className={thClass}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ORDERS.slice(0, 5).map((o) => (
-                <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
-                  <td className={tdClass}><span className="font-medium" style={{ color: "#a8893e" }}>{o.id}</span></td>
-                  <td className={tdClass}>{o.name}</td>
-                  <td className={`${tdClass} font-medium`}>{o.amt}</td>
-                  <td className={tdClass}><Badge label={o.status} className={orderStatusBadge[o.status]} /></td>
-                  <td className={`${tdClass} text-muted`}>{o.date}</td>
+
+        {/* Loading */}
+        {ordersLoading && (
+          <div className="flex items-center justify-center py-10">
+            <div className="flex flex-col items-center gap-2">
+              <svg className="animate-spin" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" stroke="#c8a96e" strokeWidth={1.5} />
+                <circle cx="12" cy="12" r="10" stroke="#c8a96e" strokeOpacity={0.15} strokeWidth={1.5} />
+              </svg>
+              <span className="font-barlow text-[0.72rem] tracking-[0.12em] uppercase text-warmgray">
+                Loading orders…
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {!ordersLoading && ordersError && (
+          <div className="px-5 py-4">
+            <div
+              className="border rounded-lg px-4 py-3 text-[0.82rem] font-barlow"
+              style={{ background: "rgba(176,92,58,0.08)", borderColor: "rgba(176,92,58,0.25)", color: "#b05c3a" }}
+              role="alert"
+            >
+              {ordersError}
+            </div>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!ordersLoading && !ordersError && recentOrders.length === 0 && (
+          <div className="py-10 text-center">
+            <p className="text-[0.82rem] text-muted font-barlow">No orders yet.</p>
+          </div>
+        )}
+
+        {/* Table */}
+        {!ordersLoading && !ordersError && recentOrders.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {["Order ID", "Customer", "Amount", "Status", "Date"].map((h) => (
+                    <th key={h} className={thClass}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {recentOrders.map((o) => (
+                  <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
+                    {/* Order ID */}
+                    <td className={tdClass}>
+                      <span className="font-medium" style={{ color: "#a8893e" }}>
+                        #BV-{o.id}
+                      </span>
+                    </td>
+                    {/* Customer — GET /orders returns userId only, not a name */}
+                    <td className={`${tdClass} text-muted`}>User #{o.userId}</td>
+                    {/* Amount */}
+                    <td className={`${tdClass} font-medium`}>{fmt(o.totalPrice)}</td>
+                    {/* Status */}
+                    <td className={tdClass}>
+                      <Badge
+                        label={toLabel(o.status)}
+                        className={recentOrderStatusBadge[o.status]}
+                      />
+                    </td>
+                    {/* Date */}
+                    <td className={`${tdClass} text-muted`}>{formatDate(o.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
