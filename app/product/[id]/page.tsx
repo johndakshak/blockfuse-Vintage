@@ -37,6 +37,7 @@ import { useRouter } from "next/navigation";
 import { getProductById, type Product } from "@/app/lib/products";
 import { addToCart } from "@/app/lib/cart";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 
 // Next.js passes route params as a prop to page components.
@@ -46,7 +47,7 @@ type Props = {
 };
 
 export default function ProductDetailPage({ params }: Props) {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
   const router = useRouter();
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -97,6 +98,11 @@ export default function ProductDetailPage({ params }: Props) {
       // Reset the "Added!" state after 2 seconds
       setTimeout(() => setAdded(false), 2000);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setCartError(
         err instanceof Error ? err.message : "Could not add to cart."
       );

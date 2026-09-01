@@ -8,6 +8,20 @@
 //
 // Pattern:
 //   Product component  →  products.ts  →  fetch()  →  Backend
+//
+// 401 handling:
+//   Admin-only functions (createProduct, updateProduct, deleteProduct) check
+//   for HTTP 401 and throw AuthError so the calling component can clear the
+//   session and redirect to /login.
+//
+// 403 handling:
+//   403 Forbidden is thrown as a plain Error — the token is valid, the user
+//   simply isn't an admin. The session must NOT be cleared.
+//
+// Public functions (getProducts, getProductById) require no token and therefore
+// have no 401 handling.
+
+import { AuthError } from "@/app/lib/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -162,11 +176,9 @@ export async function getProductById(id: string | number): Promise<GetProductByI
 //   The image is uploaded as a binary file in the "image" field.
 //   Do NOT set Content-Type manually — the browser sets the multipart boundary.
 //
-// Throws an Error if:
-//   - required fields are missing (400)
-//   - unauthenticated (401)
-//   - not an admin (403)
-//   - server returns a non-JSON response
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if not an admin (403) — session must NOT be cleared.
+// Throws plain Error if required fields are missing (400) or server unavailable.
 
 export async function createProduct(
   fields: CreateProductFields,
@@ -187,6 +199,11 @@ export async function createProduct(
     },
     body,
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -212,10 +229,8 @@ export async function createProduct(
 // All fields are optional. If no image file is provided, the existing
 // Cloudinary image is preserved (per the OpenAPI spec).
 //
-// Throws an Error if:
-//   - product not found (404)
-//   - unauthenticated (401)
-//   - not an admin (403)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if not an admin (403) or product not found (404).
 
 export async function updateProduct(
   id: number,
@@ -236,6 +251,11 @@ export async function updateProduct(
     },
     body,
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -258,10 +278,8 @@ export async function updateProduct(
 //
 // Calls DELETE /product/:id — admin only, requires Bearer token.
 //
-// Throws an Error if:
-//   - product not found (404)
-//   - unauthenticated (401)
-//   - not an admin (403)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if not an admin (403) or product not found (404).
 
 export async function deleteProduct(
   id: number,
@@ -273,6 +291,11 @@ export async function deleteProduct(
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {

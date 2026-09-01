@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { getProducts, type Product } from "@/app/lib/products";
 import { addToCart } from "@/app/lib/cart";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 
 // One entry per card: tracks whether "Quick Add" is loading or just succeeded
@@ -47,7 +48,7 @@ type CardState = {
 const delays = ["reveal-d1", "reveal-d2", "reveal-d3", "reveal-d4"];
 
 export default function NewThisWeek() {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
   const router = useRouter();
 
   // ── State ────────────────────────────────────────────────────────────────
@@ -106,6 +107,11 @@ export default function NewThisWeek() {
         }));
       }, 2000);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Could not add to cart.";
       setCardStates((prev) => ({
         ...prev,

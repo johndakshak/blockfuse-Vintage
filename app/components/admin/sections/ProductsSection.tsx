@@ -24,6 +24,7 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useAuth } from "@/app/context/AuthContext";
+import { useRouter } from "next/navigation";
 import {
   getProducts,
   createProduct,
@@ -31,6 +32,7 @@ import {
   deleteProduct,
   type Product,
 } from "@/app/lib/products";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 import { Badge } from "./DashboardSection";
 
@@ -206,7 +208,8 @@ function ProductForm({ title, initial, submitting, error, onSubmit, onCancel }: 
 // ─── ProductsSection ──────────────────────────────────────────────────────────
 
 export default function ProductsSection() {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
+  const router = useRouter();
 
   const [products, setProducts]   = useState<Product[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -267,6 +270,11 @@ export default function ProductsSection() {
       setShowAdd(false);
       await loadProducts();
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setAddError(err instanceof Error ? err.message : "Could not create product.");
     } finally {
       setAddSaving(false);
@@ -294,6 +302,11 @@ export default function ProductsSection() {
       setEditTarget(null);
       await loadProducts();
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setEditError(err instanceof Error ? err.message : "Could not update product.");
     } finally {
       setEditSaving(false);
@@ -310,6 +323,11 @@ export default function ProductsSection() {
       await deleteProduct(product.id, token);
       await loadProducts();
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not delete product.");
     } finally {
       setDeletingId(null);

@@ -8,6 +8,44 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// ─── AuthError ────────────────────────────────────────────────────────────────
+//
+// A sentinel error subclass thrown whenever the backend returns HTTP 401.
+//
+// Why a subclass?
+//   Pages and components need to distinguish "the session is invalid/expired"
+//   from "a normal API error occurred". Using a dedicated subclass lets any
+//   caller do:
+//
+//     } catch (err) {
+//       if (err instanceof AuthError) {
+//         logout();
+//         router.push("/login");
+//       } else {
+//         setError(err.message);
+//       }
+//     }
+//
+//   without duplicating status-code checks or "magic string" comparisons.
+//
+// 401 vs 403:
+//   - 401 Unauthorized → the token is missing, invalid, or expired.
+//     Throw AuthError. The caller should clear the session.
+//   - 403 Forbidden → the token is valid but the user lacks permission.
+//     Throw a plain Error. The caller should NOT clear the session.
+//
+// This class is defined in auth.ts so all lib files can import it from
+// one place without creating circular dependencies.
+
+export class AuthError extends Error {
+  constructor(message: string = "Your session has expired. Please sign in again.") {
+    super(message);
+    this.name = "AuthError";
+    // Maintain correct prototype chain in environments that transpile classes
+    Object.setPrototypeOf(this, AuthError.prototype);
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // What the backend sends back when login is successful
@@ -149,7 +187,9 @@ export async function registerUser(
 
 // Calls GET /me with the JWT token in the Authorization header.
 // Returns the full user object on success.
-// Throws an Error if the token is missing, invalid, or expired.
+//
+// Throws AuthError  if the token is invalid/expired (401).
+// Throws plain Error if anything else fails (network, 500, etc.).
 export async function getCurrentUser(token: string): Promise<MeResponse> {
   const response = await fetch(`${API_URL}/me`, {
     method: "GET",
@@ -157,6 +197,12 @@ export async function getCurrentUser(token: string): Promise<MeResponse> {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — token invalid or expired. Throw AuthError so the caller (AuthContext
+  // or a page) knows to clear the session rather than show a generic error.
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -192,10 +238,9 @@ export type GetUsersErrorResponse = {
 // Calls GET /users — admin only, requires Bearer token with ADMIN role.
 // Returns a list of all registered users.
 //
-// Throws an Error if:
-//   - unauthenticated (401)
-//   - not an admin (403)
-//   - the server returns a non-JSON response (cold start / 502)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if not an admin (403) — session must NOT be cleared.
+// Throws plain Error if the server returns a non-JSON response (cold start / 502).
 
 export async function getAdminUsers(token: string): Promise<GetUsersResponse> {
   const response = await fetch(`${API_URL}/users`, {
@@ -204,6 +249,11 @@ export async function getAdminUsers(token: string): Promise<GetUsersResponse> {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — token invalid/expired → clear session
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {

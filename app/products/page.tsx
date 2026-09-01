@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 import { getProducts, type Product } from "@/app/lib/products";
 import { addToCart } from "@/app/lib/cart";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 
 type CardState = {
@@ -36,7 +37,7 @@ type CardState = {
 };
 
 export default function ProductsPage() {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
   const router = useRouter();
 
   const [products, setProducts]     = useState<Product[]>([]);
@@ -85,6 +86,11 @@ export default function ProductsPage() {
         }));
       }, 2000);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Could not add to cart.";
       setCardStates((prev) => ({
         ...prev,

@@ -45,6 +45,7 @@ import { type CartItem, toDisplayItem } from "../components/cart/cartTypes";
 import { getCartItems } from "@/app/lib/cart";
 import { checkout, initializePayment } from "@/app/lib/checkout";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 
 const PAY_METHODS = [
   { key: "card", label: "Debit / Credit Card" },
@@ -62,7 +63,7 @@ const defaultShipping: ShippingData = {
 
 export default function CheckoutPage() {
   // ── Auth ────────────────────────────────────────────────────────────────────
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, clearAuth } = useAuth();
   const router = useRouter();
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -112,6 +113,12 @@ export default function CheckoutPage() {
         setCartItems(response.data.map(toDisplayItem));
         setCartTotal(response.totalPrice);
       } catch (err: unknown) {
+        if (err instanceof AuthError) {
+          // Token expired mid-session while loading the cart
+          clearAuth();
+          router.push("/login");
+          return;
+        }
         setCartError(
           err instanceof Error ? err.message : "Could not load your cart."
         );
@@ -165,16 +172,19 @@ export default function CheckoutPage() {
 
       // No state update needed here — the page is navigating away.
     } catch (err: unknown) {
+      // 401 — token expired mid-checkout → clear session and redirect
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
+
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
 
       // If payment initialization failed (order was already created), we surface
       // the error separately so the user knows their order exists but payment
       // was not started — they should not re-submit the form.
-      // We distinguish by checking if submitting was still true when the catch
-      // runs after checkout succeeded (i.e., it's a payment error vs checkout error).
-      // Since both share the same try block we use a single error display for now,
-      // but label it appropriately.
       setError(message);
     } finally {
       setSubmitting(false);
