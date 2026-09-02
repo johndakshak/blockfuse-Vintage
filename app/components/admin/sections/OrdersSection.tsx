@@ -28,6 +28,7 @@
 //   Update order in local state from backend response
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
 import {
   getAdminOrders,
@@ -35,6 +36,7 @@ import {
   type Order,
   type OrderStatus,
 } from "@/app/lib/checkout";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 import { Badge } from "./DashboardSection";
 
@@ -123,7 +125,8 @@ function StatusCell({ order, updating, onUpdate }: StatusCellProps) {
 // ─── OrdersSection ────────────────────────────────────────────────────────────
 
 export default function OrdersSection() {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
+  const router = useRouter();
 
   const [orders, setOrders]     = useState<Order[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -149,6 +152,11 @@ export default function OrdersSection() {
       );
       setOrders(sorted);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not load orders.");
     } finally {
       setLoading(false);
@@ -172,6 +180,11 @@ export default function OrdersSection() {
         prev.map((o) => (o.id === orderId ? res.data : o))
       );
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setUpdateError(err instanceof Error ? err.message : "Could not update order status.");
     } finally {
       setUpdatingId(null);

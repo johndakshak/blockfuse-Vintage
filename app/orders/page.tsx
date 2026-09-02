@@ -23,6 +23,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
 import { getOrders, type Order } from "@/app/lib/checkout";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 
 // Badge colour for each order status — mirrors the admin panel conventions
@@ -55,7 +56,7 @@ function formatDate(iso: string) {
 }
 
 export default function OrdersPage() {
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, clearAuth } = useAuth();
   const router = useRouter();
 
   const [orders, setOrders]   = useState<Order[]>([]);
@@ -83,6 +84,12 @@ export default function OrdersPage() {
         );
         setOrders(sorted);
       } catch (err: unknown) {
+        if (err instanceof AuthError) {
+          // Token expired — clear session and redirect to login
+          clearAuth();
+          router.push("/login");
+          return;
+        }
         setError(
           err instanceof Error ? err.message : "Could not load your orders."
         );

@@ -8,7 +8,17 @@
 //
 // Pattern:
 //   Checkout page  →  checkout.ts  →  fetch()  →  Backend
+//
+// 401 handling:
+//   All functions that require authentication check for HTTP 401 before
+//   parsing the response body and throw AuthError (from auth.ts).
+//   The calling page catches AuthError, calls logout(), and redirects to /login.
+//
+// 403 handling:
+//   403 Forbidden is thrown as a plain Error — the token is valid but the
+//   user lacks permission for that resource. The session must NOT be cleared.
 
+import { AuthError } from "@/app/lib/auth";
 import type { BackendCartItem } from "@/app/components/cart/cartTypes";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -109,10 +119,8 @@ export type PaymentErrorResponse = {
 //
 // Returns the created Order, the cart items that were ordered, and the total.
 //
-// Throws an Error if:
-//   - the cart is empty (400 — reason: "Cart is empty")
-//   - insufficient stock for a product (400 — reason: "Insufficient stock...")
-//   - unauthenticated (401)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if the cart is empty (400), insufficient stock (400), etc.
 
 export async function checkout(token: string): Promise<CheckoutResponse> {
   const response = await fetch(`${API_URL}/checkout`, {
@@ -122,6 +130,11 @@ export async function checkout(token: string): Promise<CheckoutResponse> {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -157,12 +170,9 @@ export async function checkout(token: string): Promise<CheckoutResponse> {
 // On success, returns Paystack's authorization_url which the browser should be
 // redirected to so the user can complete payment on Paystack's hosted page.
 //
-// Throws an Error if:
-//   - the order is not found (404)
-//   - the order does not belong to the user (403)
-//   - the order is not in PENDING status (409)
-//   - unauthenticated (401)
-//   - the server returns a non-JSON response (cold start / 502)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if order not found (404), order not PENDING (409),
+//   order belongs to different user (403), or server unavailable.
 
 export async function initializePayment(
   orderId: number,
@@ -175,6 +185,11 @@ export async function initializePayment(
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -216,9 +231,8 @@ export type GetOrdersErrorResponse = {
 // Returns an array of orders, each with nested items and product details.
 // Returns an empty array if the user has no orders (treats 404 as empty).
 //
-// Throws an Error if:
-//   - unauthenticated (401)
-//   - the server returns a non-JSON response (cold start / 502)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if the server returns a non-JSON response (cold start / 502).
 
 export async function getOrders(token: string): Promise<GetOrdersResponse> {
   const response = await fetch(`${API_URL}/order`, {
@@ -227,6 +241,11 @@ export async function getOrders(token: string): Promise<GetOrdersResponse> {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -270,10 +289,9 @@ export type GetAllOrdersErrorResponse = {
 // Returns every order in the system, each with nested items and product details.
 // Returns an empty array if no orders exist (treats 400/404 as empty).
 //
-// Throws an Error if:
-//   - unauthenticated (401)
-//   - not an admin (403)
-//   - the server returns a non-JSON response (cold start / 502)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if not an admin (403) — session must NOT be cleared.
+// Throws plain Error if the server returns a non-JSON response (cold start / 502).
 
 export async function getAdminOrders(token: string): Promise<GetAllOrdersResponse> {
   const response = await fetch(`${API_URL}/orders`, {
@@ -282,6 +300,11 @@ export async function getAdminOrders(token: string): Promise<GetAllOrdersRespons
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -335,12 +358,9 @@ export type UpdateOrderStatusErrorResponse = {
 //
 // Returns the updated Order on success.
 //
-// Throws an Error if:
-//   - invalid or disallowed status transition (409)
-//   - order not found (404)
-//   - unauthenticated (401)
-//   - not an admin (403)
-//   - server returns a non-JSON response (cold start / 502)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if not an admin (403), invalid transition (409),
+//   order not found (404), or server unavailable.
 
 export async function updateOrderStatus(
   orderId: number,
@@ -355,6 +375,11 @@ export async function updateOrderStatus(
     },
     body: JSON.stringify({ status }),
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/json")) {

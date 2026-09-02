@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { getProducts, type Product } from "@/app/lib/products";
 import { addToCart } from "@/app/lib/cart";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 
 type CardState = {
@@ -26,7 +27,7 @@ type CardState = {
 const delays = ["reveal-d1", "reveal-d2", "reveal-d3", "reveal-d4"];
 
 export default function StaffPicks() {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
   const router = useRouter();
 
   const [products, setProducts]     = useState<Product[]>([]);
@@ -76,6 +77,11 @@ export default function StaffPicks() {
         }));
       }, 2000);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Could not add to cart.";
       setCardStates((prev) => ({
         ...prev,

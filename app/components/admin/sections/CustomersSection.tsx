@@ -25,8 +25,9 @@
 //   The role field replaces the status column.
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
-import { getAdminUsers, type User } from "@/app/lib/auth";
+import { getAdminUsers, type User, AuthError } from "@/app/lib/auth";
 import { Badge } from "./DashboardSection";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,7 +58,8 @@ function getInitials(name: string) {
 // ─── CustomersSection ─────────────────────────────────────────────────────────
 
 export default function CustomersSection() {
-  const { token } = useAuth();
+  const { token, clearAuth } = useAuth();
+  const router = useRouter();
 
   const [users, setUsers]     = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +81,12 @@ export default function CustomersSection() {
       );
       setUsers(sorted);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        // Token expired/invalid — clear session and redirect to login
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not load customers.");
     } finally {
       setLoading(false);

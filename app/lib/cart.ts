@@ -8,7 +8,17 @@
 //
 // Pattern:
 //   Cart page  →  cart.ts  →  fetch()  →  Backend
+//
+// 401 handling:
+//   Every authenticated cart function checks for HTTP 401 before parsing
+//   the response body. A 401 throws AuthError (from auth.ts), which the
+//   calling page catches to clear the session and redirect to /login.
+//
+// 403 handling:
+//   403 Forbidden is thrown as a plain Error — the session is NOT cleared
+//   because the token is valid; the user simply lacks permission for that item.
 
+import { AuthError } from "@/app/lib/auth";
 import type {
   GetCartItemsResponse,
   AddToCartResponse,
@@ -24,9 +34,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 // Returns all items in the user's cart, each with the nested product details.
 // Also returns the server-calculated totalPrice.
 //
-// Throws an Error if:
-//   - the token is missing or invalid (401)
-//   - anything else goes wrong
+// Throws AuthError  if the token is invalid/expired (401).
+// Throws plain Error if anything else goes wrong.
 
 export async function getCartItems(token: string): Promise<GetCartItemsResponse> {
   const response = await fetch(`${API_URL}/cartItems`, {
@@ -35,6 +44,11 @@ export async function getCartItems(token: string): Promise<GetCartItemsResponse>
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const data: GetCartItemsResponse | CartErrorResponse = await response.json();
 
@@ -62,11 +76,9 @@ export async function getCartItems(token: string): Promise<GetCartItemsResponse>
 // If the product is already in the cart the backend increments the quantity
 // (upsert behaviour — you do NOT need to check first).
 //
-// Throws an Error if:
-//   - productId or quantity is invalid (400)
-//   - product not found (404)
-//   - requested quantity exceeds stock (409)
-//   - unauthenticated (401)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if productId/quantity invalid (400), product not found (404),
+//   or quantity exceeds stock (409).
 
 export async function addToCart(
   token: string,
@@ -81,6 +93,11 @@ export async function addToCart(
     },
     body: JSON.stringify({ productId, quantity }),
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   const data: AddToCartResponse | CartErrorResponse = await response.json();
 
@@ -99,11 +116,9 @@ export async function addToCart(
 // Request body (from OpenAPI spec):
 //   { quantity: number }  — minimum 1
 //
-// Throws an Error if:
-//   - the cart item is not found (404)
-//   - the cart item belongs to a different user (403)
-//   - quantity < 1 (400)
-//   - unauthenticated (401)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if the cart item is not found (404), belongs to a different
+//   user (403), or quantity < 1 (400). 403 does NOT clear the session.
 
 export async function updateCartItem(
   token: string,
@@ -119,6 +134,11 @@ export async function updateCartItem(
     body: JSON.stringify({ quantity }),
   });
 
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
+
   const data: UpdateCartItemResponse | CartErrorResponse = await response.json();
 
   if (!data.success) {
@@ -133,10 +153,9 @@ export async function updateCartItem(
 // Calls DELETE /cart/:id to remove a specific item from the cart.
 // The :id is the cart item ID (not the product ID).
 //
-// Throws an Error if:
-//   - the cart item is not found (404)
-//   - the cart item belongs to a different user (403)
-//   - unauthenticated (401)
+// Throws AuthError  if unauthenticated (401) — session should be cleared.
+// Throws plain Error if the cart item is not found (404) or belongs to a
+//   different user (403). 403 does NOT clear the session.
 
 export async function removeCartItem(
   token: string,
@@ -148,6 +167,11 @@ export async function removeCartItem(
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // 401 — session invalid/expired
+  if (response.status === 401) {
+    throw new AuthError();
+  }
 
   // DELETE returns { success: true, msg: "Cart item deleted successfully" }
   // We only need to know if it failed.
