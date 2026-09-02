@@ -14,10 +14,17 @@
 //   - user:  the user object from GET /me (or null if not logged in)
 //
 // Where the token is saved:
-//   localStorage — simple, readable, works for learning this flow.
-//   Note: localStorage is accessible to JavaScript on the page. For a production app
-//   with strict security requirements you'd use an httpOnly cookie instead.
-//   For this project, localStorage is fine and easy to understand.
+//   localStorage   — when the user checks "Remember Me". The token persists
+//                    across browser restarts until it expires or the user logs out.
+//   sessionStorage — when "Remember Me" is unchecked. The token lives only for
+//                    the current browser tab/session and is gone when the tab closes.
+//
+//   Note: both storage APIs are accessible to JavaScript on the page. For a
+//   production app with strict security requirements you'd use an httpOnly cookie
+//   instead. For this project, localStorage/sessionStorage are fine.
+//
+//   There is always at most one active token (in one location). login() writes to
+//   exactly one storage; logout/clearAuth removes from both to prevent stale tokens.
 //
 // How to use in a component:
 //   import { useAuth } from "@/app/context/AuthContext";
@@ -42,7 +49,7 @@
 // clearAuth() is identical to logout() in what it does to state and storage,
 // but is semantically distinct — it means "the server rejected this session"
 // rather than "the user chose to sign out". Both remove the token from
-// localStorage and clear user/token state in the context.
+// localStorage and sessionStorage and clear user/token state in the context.
 //
 // GET /me on app load:
 //   If the stored token is expired, getCurrentUser() throws AuthError.
@@ -77,18 +84,20 @@ type AuthContextValue = {
   // True while we are loading the user from the token on page refresh
   loading: boolean;
 
-  // Call this after a successful login — it saves the token and fetches the user
-  login: (token: string) => Promise<void>;
+  // Call this after a successful login — it saves the token and fetches the user.
+  // Pass rememberMe=true to persist the token in localStorage (survives browser restart).
+  // Pass rememberMe=false to store in sessionStorage (cleared when the tab/session closes).
+  login: (token: string, rememberMe: boolean) => Promise<void>;
 
   // Call this when the user deliberately signs out.
-  // Removes the token from localStorage and clears state.
+  // Removes the token from both localStorage and sessionStorage, then clears state.
   logout: () => void;
 
   // Call this when the backend rejects the session (401 AuthError).
   // Functionally identical to logout() — removes the token from localStorage
-  // and clears user/token state — but exists as a separate function to make
-  // the intent clear: the session was invalidated by the server, not by
-  // the user's choice.
+  // and sessionStorage and clears user/token state — but exists as a separate
+  // function to make the intent clear: the session was invalidated by the server,
+  // not by the user's choice.
   clearAuth: () => void;
 };
 
@@ -105,13 +114,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true); // true on first load while we check localStorage
 
-  // On first render: check localStorage for an existing token.
-  // If one exists, try to fetch the current user from GET /me.
-  // If the token is rejected by the server (AuthError / 401), remove it.
+  // On first render: check for an existing token.
+  // localStorage is checked first (remembered login), then sessionStorage (session-only login).
+  // At most one of these will have a token — login() always writes to exactly one location.
+  // If the token is rejected by the server (AuthError / 401), remove it from both locations.
   // If there is a network/server failure, preserve the token — it may still be valid.
   useEffect(() => {
     async function loadUserFromStorage() {
-      const savedToken = localStorage.getItem("auth_token");
+      // Prefer localStorage (remembered) over sessionStorage (session-only).
+      // A token is only ever written to one of them at a time.
+      const savedToken =
+        localStorage.getItem("auth_token") ??
+        sessionStorage.getItem("auth_token");
 
       if (!savedToken) {
         // No token saved — user is not logged in
@@ -129,13 +143,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (err instanceof AuthError) {
           // The server explicitly rejected the token (401) — it is invalid or expired.
-          // Remove it so the app starts in a clean unauthenticated state.
+          // Remove it from both storage locations so the app starts unauthenticated.
           console.info("[AuthContext] Stored token rejected by server (401) — clearing session.");
           localStorage.removeItem("auth_token");
+          sessionStorage.removeItem("auth_token");
         } else {
           // Network or server error — the token has NOT been rejected.
           // A transient outage must not log the user out of a valid session.
-          // Leave the token in localStorage; the user can retry or navigate later.
+          // Leave the token in storage; the user can retry or navigate later.
           console.warn("[AuthContext] Could not verify stored token (network/server error):", err);
         }
         // Either way, do not setToken or setUser — leave them as null so the
@@ -151,9 +166,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []); // Empty array means this runs once when the component mounts
 
   // Called after a successful login.
-  // Saves the token to localStorage, then fetches the user profile from GET /me.
-  async function login(newToken: string) {
-    localStorage.setItem("auth_token", newToken);
+  // rememberMe=true  → saves the token in localStorage  (persists across browser restarts)
+  // rememberMe=false → saves the token in sessionStorage (cleared when the tab/session closes)
+  // Always writes to exactly one location so there is never a conflict between the two.
+  async function login(newToken: string, rememberMe: boolean) {
+    if (rememberMe) {
+      localStorage.setItem("auth_token", newToken);
+    } else {
+      sessionStorage.setItem("auth_token", newToken);
+    }
     setToken(newToken);
 
     // Fetch the user profile so we have name, email, role, etc.
@@ -162,15 +183,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // Called when the user deliberately clicks "Sign Out".
-  // Removes the token from localStorage and clears state.
+  // Removes the token from both storage locations (covers remembered and session-only logins)
+  // and clears state.
   function logout() {
     localStorage.removeItem("auth_token");
+    sessionStorage.removeItem("auth_token");
     setToken(null);
     setUser(null);
   }
 
   // Called when the backend rejects a request with HTTP 401.
-  // Removes the invalid token from localStorage and clears state, so:
+  // Removes the token from both storage locations and clears state, so:
   //   - The Navbar shows "Sign In" instead of the user's name
   //   - Protected pages redirect to /login
   //   - No stale authenticated UI remains visible
@@ -179,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // calling clearAuth(), typically with router.push("/login").
   function clearAuth() {
     localStorage.removeItem("auth_token");
+    sessionStorage.removeItem("auth_token");
     setToken(null);
     setUser(null);
   }
