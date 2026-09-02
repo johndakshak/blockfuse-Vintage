@@ -178,6 +178,7 @@ export default function OrdersSection() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadOrders();
 
     // ── Load users for customer name lookup ───────────────────────────────
@@ -204,9 +205,16 @@ export default function OrdersSection() {
     setUpdateError("");
     try {
       const res = await updateOrderStatus(orderId, status, token);
-      // Update the specific order in state from the backend response
+      // Merge the updated order fields from the backend response onto the existing
+      // local order. The PATCH /order/status/:id endpoint returns the updated Order
+      // but may not include the nested items array. We preserve the existing items
+      // to avoid a render crash when the table accesses o.items.length.
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? res.data : o))
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, ...res.data, items: res.data.items?.length ? res.data.items : o.items }
+            : o
+        )
       );
     } catch (err: unknown) {
       if (err instanceof AuthError) {

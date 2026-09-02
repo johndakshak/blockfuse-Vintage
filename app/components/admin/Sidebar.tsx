@@ -37,7 +37,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       {
         id: "products",
         label: "Products",
-        pill: "48",
         icon: (
           <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 fill-none stroke-current" strokeWidth={1.7}>
             <path d="M20 7H4a1 1 0 00-1 1v10a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z" />
@@ -48,7 +47,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       {
         id: "orders",
         label: "Orders",
-        pill: "12",
         icon: (
           <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 fill-none stroke-current" strokeWidth={1.7}>
             <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
