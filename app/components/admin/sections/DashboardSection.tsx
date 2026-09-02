@@ -582,6 +582,14 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
           const recent = [...allOrders]
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 5);
+
+          // Build userId → User lookup from the already-fetched users list.
+          // usersState.data may be null if GET /users failed — fall back to
+          // "User #N" in that case so the orders table still renders correctly.
+          const userMap = new Map(
+            (usersState.data ?? []).map((u) => [u.id, u])
+          );
+
           return (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
@@ -593,19 +601,23 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {recent.map((o) => (
-                    <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
-                      <td className={tdClass}>
-                        <span className="font-medium" style={{ color: "#a8893e" }}>#BV-{o.id}</span>
-                      </td>
-                      <td className={`${tdClass} text-muted`}>User #{o.userId}</td>
-                      <td className={`${tdClass} font-medium`}>{fmt(o.totalPrice)}</td>
-                      <td className={tdClass}>
-                        <Badge label={toLabel(o.status)} className={recentOrderStatusBadge[o.status]} />
-                      </td>
-                      <td className={`${tdClass} text-muted`}>{formatDate(o.createdAt)}</td>
-                    </tr>
-                  ))}
+                  {recent.map((o) => {
+                    const customer = userMap.get(o.userId);
+                    const customerName = customer ? customer.name : `User #${o.userId}`;
+                    return (
+                      <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
+                        <td className={tdClass}>
+                          <span className="font-medium" style={{ color: "#a8893e" }}>#BV-{o.id}</span>
+                        </td>
+                        <td className={`${tdClass} text-muted`}>{customerName}</td>
+                        <td className={`${tdClass} font-medium`}>{fmt(o.totalPrice)}</td>
+                        <td className={tdClass}>
+                          <Badge label={toLabel(o.status)} className={recentOrderStatusBadge[o.status]} />
+                        </td>
+                        <td className={`${tdClass} text-muted`}>{formatDate(o.createdAt)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

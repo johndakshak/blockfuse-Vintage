@@ -16,6 +16,16 @@
 //     ↓
 //   Real orders table renders
 //
+// Customer names:
+//   useEffect → getAdminUsers(token)
+//     ↓
+//   GET /users  (admin only)
+//     ↓
+//   Build Map<userId, User> for O(1) name lookup
+//     ↓
+//   Order rows show customer.name instead of "User #N"
+//   Falls back to "User #N" if GET /users fails or user is not found.
+//
 // Status update:
 //   Admin selects new status from dropdown
 //     ↓
@@ -36,7 +46,7 @@ import {
   type Order,
   type OrderStatus,
 } from "@/app/lib/checkout";
-import { AuthError } from "@/app/lib/auth";
+import { getAdminUsers, type User, AuthError } from "@/app/lib/auth";
 import { fmt } from "@/app/components/cart/cartTypes";
 import { Badge } from "./DashboardSection";
 
@@ -132,6 +142,10 @@ export default function OrdersSection() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
 
+  // userId → User lookup map — built from GET /users on mount.
+  // Null means the request hasn't completed yet or failed gracefully.
+  const [userMap, setUserMap]   = useState<Map<number, User>>(new Map());
+
   // Track which order ID is currently having its status updated
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [updateError, setUpdateError] = useState("");
@@ -165,6 +179,21 @@ export default function OrdersSection() {
 
   useEffect(() => {
     void loadOrders();
+
+    // ── Load users for customer name lookup ───────────────────────────────
+    // Fetches GET /users once on mount (or when token changes) and builds a
+    // Map<userId, User> so each order row can resolve a name in O(1).
+    // A failure here is intentionally non-blocking — orders still render,
+    // just with "User #N" fallbacks in the Customer column.
+    if (!token) return;
+    void (async () => {
+      try {
+        const res = await getAdminUsers(token);
+        setUserMap(new Map(res.data.map((u) => [u.id, u])));
+      } catch {
+        // Silently ignore — userMap stays empty, rows fall back to "User #N"
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -298,6 +327,8 @@ export default function OrdersSection() {
                 {visible.map((o) => {
                   const pay = paymentLabel(o.paymentReference);
                   const isUpdating = updatingId === o.id;
+                  const customer = userMap.get(o.userId);
+                  const customerName = customer ? customer.name : `User #${o.userId}`;
                   return (
                     <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
                       {/* Order ID */}
@@ -306,9 +337,9 @@ export default function OrdersSection() {
                           #BV-{o.id}
                         </span>
                       </td>
-                      {/* User */}
+                      {/* Customer — resolved from GET /users; fallback to User #N */}
                       <td className={`${tdClass} text-muted`}>
-                        User #{o.userId}
+                        {customerName}
                       </td>
                       {/* Items count */}
                       <td className={tdClass}>{o.items.length}</td>
