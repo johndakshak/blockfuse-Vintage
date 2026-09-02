@@ -33,12 +33,13 @@ import {
   removeCartItem,
 } from "@/app/lib/cart";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 
 export default function CartPage() {
   // ── Auth ──────────────────────────────────────────────────────────────────
   // We read the JWT token from the global AuthContext.
   // The token is required for every cart API call.
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, clearAuth } = useAuth();
   const router = useRouter();
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -64,6 +65,14 @@ export default function CartPage() {
       setCartItems(response.data.map(toDisplayItem));
       setTotalPrice(response.totalPrice);
     } catch (err: unknown) {
+      // 401 — token expired mid-session while loading the cart.
+      // Clear the session and redirect to login, the same way every other
+      // protected page handles AuthError (checkout, orders, admin sections).
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not load your cart.");
     } finally {
       setLoading(false);
@@ -110,6 +119,11 @@ export default function CartPage() {
       // Reload the full cart from the backend to keep everything in sync
       await loadCart(token);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not update quantity.");
     }
   }
@@ -122,6 +136,11 @@ export default function CartPage() {
       await removeCartItem(token, cartItemId);
       await loadCart(token);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not remove item.");
     }
   }
@@ -138,6 +157,11 @@ export default function CartPage() {
       await Promise.all(cartItems.map((item) => removeCartItem(token, item.id)));
       await loadCart(token);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not clear cart.");
     }
   }

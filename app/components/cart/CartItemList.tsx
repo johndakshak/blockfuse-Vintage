@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { type CartItem, fmt } from "./cartTypes";
 
@@ -48,9 +49,21 @@ export default function CartItemList({ items, onChangeQty, onRemove, onClear }: 
             className="flex gap-5 px-6 py-5 border-b border-charcoal/[0.05] last:border-0 hover:bg-[#faf9f6] transition-colors"
             style={{ animation: `fadeUp 0.35s ease ${i * 0.05}s both` }}
           >
-            {/* Image placeholder */}
-            <div className="w-[90px] h-[110px] rounded-xl bg-parchment border border-charcoal/10 flex-shrink-0 flex items-center justify-center">
-              <span className="text-[0.55rem] tracking-[0.1em] uppercase text-warmgray">Photo</span>
+            {/* Product image — real Cloudinary URL from backend; fallback for missing */}
+            <div className="w-[90px] h-[110px] rounded-xl bg-parchment border border-charcoal/10 flex-shrink-0 overflow-hidden relative">
+              {item.imageUrl ? (
+                <Image
+                  src={item.imageUrl}
+                  alt={item.name}
+                  fill
+                  className="object-cover"
+                  sizes="90px"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-[0.55rem] tracking-[0.1em] uppercase text-warmgray">Photo</span>
+                </div>
+              )}
             </div>
 
             {/* Body */}
