@@ -1,4 +1,8 @@
+'use client'
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/context/AuthContext";
 
 export type SectionId = "dashboard" | "products" | "orders" | "customers" | "settings";
 
@@ -91,6 +95,24 @@ type Props = {
 };
 
 export default function Sidebar({ active, onNavigate, isOpen, onClose }: Props) {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  // The admin's initials derived from their real name (e.g. "John Doe" → "JD")
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0].toUpperCase())
+        .join("")
+    : "AD";
+
+  function handleLogout() {
+    logout();
+    router.push("/");
+  }
+
   return (
     <>
       {/* Mobile overlay */}
@@ -153,24 +175,24 @@ export default function Sidebar({ active, onNavigate, isOpen, onClose }: Props) 
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* Footer — shows the real logged-in admin user */}
         <div className="flex items-center gap-2.5 px-5 py-4 border-t border-charcoal/[0.09]">
           <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-[0.7rem] font-semibold flex-shrink-0" style={{ color: "#a8893e" }}>
-            AD
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[0.8rem] font-medium text-charcoal truncate">Admin User</div>
-            <div className="text-[0.62rem] tracking-[0.08em] uppercase text-warmgray">Super Admin</div>
+            <div className="text-[0.8rem] font-medium text-charcoal truncate">{user?.name ?? "Admin"}</div>
+            <div className="text-[0.62rem] tracking-[0.08em] uppercase text-warmgray truncate">{user?.email ?? ""}</div>
           </div>
-          <Link
-            href="/login"
+          <button
+            onClick={handleLogout}
             title="Logout"
-            className="text-warmgray hover:text-rust transition-colors"
+            className="text-warmgray hover:text-rust transition-colors bg-transparent border-none cursor-pointer p-0"
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-          </Link>
+          </button>
         </div>
       </aside>
     </>

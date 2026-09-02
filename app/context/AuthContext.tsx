@@ -99,6 +99,11 @@ type AuthContextValue = {
   // function to make the intent clear: the session was invalidated by the server,
   // not by the user's choice.
   clearAuth: () => void;
+
+  // Call this after a successful PATCH /users/update/:id to keep the in-context
+  // user object in sync with what the backend now has. Pass only the fields that
+  // were actually updated — other fields are preserved from the existing user object.
+  updateUser: (fields: Partial<User>) => void;
 };
 
 // ─── Create the context ───────────────────────────────────────────────────────
@@ -207,8 +212,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  // Called after a successful PATCH /users/update/:id.
+  // Merges the updated fields into the existing user object so the rest of the
+  // application (Navbar greeting, admin sidebar, etc.) reflects the new values
+  // without requiring a full page reload or a second GET /me request.
+  function updateUser(fields: Partial<User>) {
+    setUser((prev) => (prev ? { ...prev, ...fields } : prev));
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, clearAuth }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, clearAuth, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

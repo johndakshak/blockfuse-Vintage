@@ -288,3 +288,124 @@ export async function getAdminUsers(token: string): Promise<GetUsersResponse> {
 
   return data as GetUsersResponse;
 }
+
+// ─── Update User ──────────────────────────────────────────────────────────────
+
+// The fields the backend accepts for PATCH /users/update/:id.
+// Only name and email are supported by the user API.
+// Do NOT include phone, address, or other unsupported fields.
+export type UpdateUserPayload = {
+  name?: string;
+  email?: string;
+};
+
+// What the backend sends back when PATCH /users/update/:id succeeds
+export type UpdateUserResponse = {
+  success: true;
+  msg: string;
+  data: User;
+};
+
+// Calls PATCH /users/update/:id with the fields to update.
+// Returns the updated User object on success.
+//
+// Throws AuthError  if the token is invalid/expired (401).
+// Throws plain Error for other HTTP failures or non-JSON responses.
+// Throws plain Error (via handleNetworkError) if fetch() itself rejects.
+export async function updateUser(
+  id: number,
+  payload: UpdateUserPayload,
+  token: string
+): Promise<UpdateUserResponse> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}/users/update/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    // fetch() threw — network-level failure (server down, DNS error, offline, etc.)
+    handleNetworkError(err, `PATCH /users/update/${id}`);
+  }
+
+  if (response.status === 401) {
+    throw new AuthError();
+  }
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: UpdateUserResponse | ErrorResponse = await response.json();
+
+  if (!response.ok || !data.success) {
+    throw new Error((data as ErrorResponse).msg || "Could not update profile.");
+  }
+
+  return data as UpdateUserResponse;
+}
+
+// ─── Delete User ──────────────────────────────────────────────────────────────
+
+// What the backend sends back when DELETE /users/delete/:id succeeds
+export type DeleteUserResponse = {
+  success: true;
+  msg: string;
+};
+
+// Calls DELETE /users/delete/:id.
+// On success, the caller is responsible for clearing authentication and redirecting.
+//
+// Throws AuthError  if the token is invalid/expired (401).
+// Throws plain Error for other HTTP failures or non-JSON responses.
+// Throws plain Error (via handleNetworkError) if fetch() itself rejects.
+export async function deleteUser(
+  id: number,
+  token: string
+): Promise<DeleteUserResponse> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}/users/delete/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (err) {
+    // fetch() threw — network-level failure. Do NOT treat as authentication failure.
+    handleNetworkError(err, `DELETE /users/delete/${id}`);
+  }
+
+  if (response.status === 401) {
+    throw new AuthError();
+  }
+
+  // Some DELETE endpoints return 204 No Content with no body — handle gracefully.
+  if (response.status === 204) {
+    return { success: true, msg: "Account deleted." };
+  }
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
+  const data: DeleteUserResponse | ErrorResponse = await response.json();
+
+  if (!response.ok || !data.success) {
+    throw new Error((data as ErrorResponse).msg || "Could not delete account.");
+  }
+
+  return data as DeleteUserResponse;
+}

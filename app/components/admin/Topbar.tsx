@@ -1,3 +1,6 @@
+'use client'
+
+import { useAuth } from "@/app/context/AuthContext";
 import type { SectionId } from "./Sidebar";
 
 const TITLES: Record<SectionId, string> = {
@@ -14,6 +17,16 @@ type Props = {
 };
 
 export default function Topbar({ active, onMenuOpen }: Props) {
+  const { user } = useAuth();
+
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0].toUpperCase())
+        .join("")
+    : "AD";
   return (
     <div className="bg-white border-b border-charcoal/[0.07] h-14 px-7 flex items-center justify-between sticky top-[3px] z-[100]">
       <div className="flex items-center gap-3">
@@ -54,9 +67,9 @@ export default function Topbar({ active, onMenuOpen }: Props) {
           <span className="absolute top-1.5 right-1.5 w-[7px] h-[7px] bg-rust rounded-full border-[1.5px] border-white" />
         </div>
 
-        {/* Avatar */}
+        {/* Avatar — shows real user initials */}
         <div className="w-[34px] h-[34px] rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-[0.7rem] font-semibold cursor-pointer" style={{ color: "#a8893e" }}>
-          AD
+          {initials}
         </div>
       </div>
     </div>
