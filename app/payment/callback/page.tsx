@@ -59,7 +59,7 @@
 //     ↓
 //   Result UI
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
@@ -143,7 +143,7 @@ function getResultConfig(kind: ResultKind): ResultConfig {
         heading: "Order Confirmed",
         subheading: "Payment received",
         bodyText:
-          "Your payment has been confirmed and your order is being prepared. You can track its progress in your order history.",
+          "Your payment has been confirmed and your order is being prepared. You will be redirected to your order history shortly.",
       };
 
     case "pending":
@@ -264,6 +264,25 @@ export default function PaymentCallbackPage() {
   // ── Derived display state ──────────────────────────────────────────────────
   const kind: ResultKind = order ? resolveResultKind(order.status) : "unknown";
   const config = getResultConfig(kind);
+
+  // ── Auto-redirect to /orders for confirmed payments ────────────────────────
+  // When the order is confirmed (PROCESSING / SHIPPED / DELIVERED), redirect
+  // the customer to /orders after a short delay so they can see the result card
+  // briefly before being taken to their order history.
+  // A ref prevents the timeout from being set more than once.
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (kind === "confirmed" && !redirectTimerRef.current) {
+      redirectTimerRef.current = setTimeout(() => {
+        router.push("/orders");
+      }, 3000); // 3-second delay so the customer sees the confirmation
+    }
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, [kind, router]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (

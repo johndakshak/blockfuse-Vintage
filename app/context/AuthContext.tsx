@@ -68,9 +68,11 @@ import {
   useContext,
   useEffect,
   useState,
+  useCallback,
   ReactNode,
 } from "react";
 import { getCurrentUser, User, AuthError } from "@/app/lib/auth";
+import { getCartItems } from "@/app/lib/cart";
 
 // ─── Shape of the context value ───────────────────────────────────────────────
 
@@ -104,6 +106,17 @@ type AuthContextValue = {
   // user object in sync with what the backend now has. Pass only the fields that
   // were actually updated — other fields are preserved from the existing user object.
   updateUser: (fields: Partial<User>) => void;
+
+  // The total quantity of items currently in the authenticated user's cart.
+  // Sum of all item.quantity values, NOT the number of distinct cart rows.
+  // null  = not yet loaded / user is not logged in.
+  // 0     = cart is empty (badge hidden in Navbar).
+  cartCount: number | null;
+
+  // Call this to (re-)fetch the cart count from the backend.
+  // Pages that mutate the cart (add/update/remove/checkout) should call this
+  // after a successful mutation so the Navbar badge stays in sync.
+  refreshCartCount: () => Promise<void>;
 };
 
 // ─── Create the context ───────────────────────────────────────────────────────
@@ -118,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true); // true on first load while we check localStorage
+  const [cartCount, setCartCount] = useState<number | null>(null);
 
   // On first render: check for an existing token.
   // localStorage is checked first (remembered login), then sessionStorage (session-only login).
@@ -187,7 +201,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   }
 
-  // Called when the user deliberately clicks "Sign Out".
+  // ─── Cart count ─────────────────────────────────────────────────────────────
+  //
+  // Fetches the total cart quantity (sum of all item quantities) for the
+  // authenticated user. Used by the Navbar badge.
+  //
+  // Failures are swallowed silently — a badge fetch error must never break the
+  // Navbar or other UI. The count stays null on error (badge hidden).
+  //
+  // Pages that mutate the cart should call refreshCartCount() after a successful
+  // mutation so the badge reflects the new state without a page reload.
+  const refreshCartCount = useCallback(async () => {
+    // Read storage directly so this function does not need token in its dep array.
+    const storedToken =
+      localStorage.getItem("auth_token") ??
+      sessionStorage.getItem("auth_token");
+    if (!storedToken) {
+      setCartCount(null);
+      return;
+    }
+    try {
+      const res = await getCartItems(storedToken);
+      // Sum all item quantities — NOT just the number of distinct cart rows.
+      const total = res.data.reduce((sum, item) => sum + item.quantity, 0);
+      setCartCount(total);
+    } catch {
+      // Network error, AuthError, etc. — silently ignore.
+      // Leave cartCount unchanged so the badge shows the last known value.
+    }
+  }, []); // stable — reads storage directly, no external deps
+
+  // Fetch cart count whenever the user token is set (on login or page reload with
+  // stored token). When token becomes null (logout / clearAuth), reset immediately.
+  useEffect(() => {
+    if (token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void refreshCartCount();
+    } else {
+      setCartCount(null);
+    }
+  }, [token, refreshCartCount]);
+
   // Removes the token from both storage locations (covers remembered and session-only logins)
   // and clears state.
   function logout() {
@@ -195,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("auth_token");
     setToken(null);
     setUser(null);
+    setCartCount(null);
   }
 
   // Called when the backend rejects a request with HTTP 401.
@@ -210,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("auth_token");
     setToken(null);
     setUser(null);
+    setCartCount(null);
   }
 
   // Called after a successful PATCH /users/update/:id.
@@ -221,7 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, clearAuth, updateUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, clearAuth, updateUser, cartCount, refreshCartCount }}>
       {children}
     </AuthContext.Provider>
   );
