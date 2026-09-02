@@ -49,6 +49,12 @@
 //   The loadUserFromStorage catch block removes the token and finishes loading
 //   cleanly — the app starts in an unauthenticated state without any redirect.
 //   Protected pages then redirect to /login themselves via their own guards.
+//
+//   If the server is unreachable (network error), getCurrentUser() throws a
+//   plain Error. The loadUserFromStorage catch block does NOT remove the token —
+//   the user still has a valid session; the outage is transient. The app starts
+//   in an unauthenticated UI state for this load, but the token is preserved for
+//   when the server becomes available again.
 
 import {
   createContext,
@@ -101,7 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // On first render: check localStorage for an existing token.
   // If one exists, try to fetch the current user from GET /me.
-  // If the token is expired or invalid (AuthError or any other error), clear it.
+  // If the token is rejected by the server (AuthError / 401), remove it.
+  // If there is a network/server failure, preserve the token — it may still be valid.
   useEffect(() => {
     async function loadUserFromStorage() {
       const savedToken = localStorage.getItem("auth_token");
@@ -115,23 +122,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Token exists — verify it by calling GET /me.
         // getCurrentUser() throws AuthError if the backend returns 401 (expired/invalid).
-        // It throws a plain Error if there is a network failure.
-        // In both cases we clear the invalid token below.
+        // It throws a plain Error if there is a network or server failure.
         const response = await getCurrentUser(savedToken);
         setToken(savedToken);
         setUser(response.user);
       } catch (err) {
-        // Token is invalid, expired, or the server is unreachable.
-        // Log the specific reason for debugging — AuthError means 401, others
-        // mean network/server issues.
         if (err instanceof AuthError) {
+          // The server explicitly rejected the token (401) — it is invalid or expired.
+          // Remove it so the app starts in a clean unauthenticated state.
           console.info("[AuthContext] Stored token rejected by server (401) — clearing session.");
+          localStorage.removeItem("auth_token");
         } else {
-          console.warn("[AuthContext] Could not verify stored token:", err);
+          // Network or server error — the token has NOT been rejected.
+          // A transient outage must not log the user out of a valid session.
+          // Leave the token in localStorage; the user can retry or navigate later.
+          console.warn("[AuthContext] Could not verify stored token (network/server error):", err);
         }
-        // Either way, remove the stale token so the app starts unauthenticated.
-        // Do NOT setToken or setUser — leave them as null (their initial values).
-        localStorage.removeItem("auth_token");
+        // Either way, do not setToken or setUser — leave them as null so the
+        // app renders in an unauthenticated state for this load attempt.
       } finally {
         // Always finish loading, regardless of success or failure.
         // This prevents a permanent loading screen.

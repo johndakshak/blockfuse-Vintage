@@ -189,14 +189,30 @@ export async function registerUser(
 // Returns the full user object on success.
 //
 // Throws AuthError  if the token is invalid/expired (401).
-// Throws plain Error if anything else fails (network, 500, etc.).
+//   Callers should clear the session — the JWT is no longer valid.
+//
+// Throws plain Error for any other HTTP failure (500, 503, etc.) or a
+//   non-JSON response (e.g. Render free-tier cold-start HTML error page).
+//   Callers must NOT clear the session — the token may still be valid.
+//
+// Throws plain Error (via handleNetworkError) if fetch() itself rejects:
+//   network offline, DNS failure, server unreachable, connection refused, etc.
+//   Callers must NOT clear the session — this is not an authentication failure.
 export async function getCurrentUser(token: string): Promise<MeResponse> {
-  const response = await fetch(`${API_URL}/me`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (err) {
+    // fetch() threw — network-level failure (server down, DNS error, offline, etc.)
+    // Do NOT throw AuthError here: the token has not been rejected by the server.
+    handleNetworkError(err, "GET /me");
+  }
 
   // 401 — token invalid or expired. Throw AuthError so the caller (AuthContext
   // or a page) knows to clear the session rather than show a generic error.
