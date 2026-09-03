@@ -2,40 +2,71 @@
 
 // app/components/admin/sections/DashboardSection.tsx
 //
-// The main admin dashboard.
+// Admin Dashboard — all metrics now use real backend data where available.
 //
-// The Recent Orders table previously used hardcoded mock data from adminData.ts.
-// It now fetches real orders from GET /orders via getAdminOrders().
+// ── What changed in this task ──────────────────────────────────────────────
+// Previously: stat cards, revenue chart, and categories were all hardcoded mock data.
+// Now:
+//   Total Orders    → real count from GET /orders
+//   Total Customers → real count of role=USER accounts from GET /users
+//   Total Products  → real count from GET /products
+//   Revenue         → sum of totalPrice for orders where paymentReference !== null
+//                     (non-null paymentReference means Paystack confirmed payment)
+//   Revenue chart   → real 7-day daily revenue from paid orders
+//   Top Categories  → "Unavailable" — Product schema has no category field
+//   Dashboard date  → real current date via new Date()
 //
-// Data flow — Recent Orders:
-//   DashboardSection mounts
-//     ↓
-//   useEffect → getAdminOrders(token)   ← app/lib/checkout.ts
-//     ↓
-//   GET /orders  (admin only)
-//     ↓
-//   setRecentOrders()
-//     ↓
-//   5 most recent real orders render
+// ── Data flows ──────────────────────────────────────────────────────────────
 //
-// All other dashboard widgets (stat cards, revenue chart, categories) remain
-// unchanged — they have no backend support yet and are out of scope.
+//   Stat cards + Revenue chart:
+//     DashboardSection mounts
+//       ↓
+//     useEffect → getAdminOrders(token)     ← app/lib/checkout.ts
+//     useEffect → getAdminUsers(token)      ← app/lib/auth.ts
+//     useEffect → getProducts()             ← app/lib/products.ts  (no token — public)
+//       ↓
+//     GET /orders, GET /users, GET /products  (three independent requests)
+//       ↓
+//     Derive metrics client-side from real response data
 //
-// NOTE: GET /orders returns userId (a number), not the customer's name.
-// The Customer column therefore shows "User #N". No additional GET /users/:id
-// calls are made — that would be N extra requests per page load.
+//   Recent Orders (unchanged from previous task):
+//     DashboardSection mounts
+//       ↓
+//     useEffect → getAdminOrders(token)     ← app/lib/checkout.ts
+//       ↓
+//     GET /orders
+//       ↓
+//     5 most recent real orders render
+//
+// ── Why products uses no token ──────────────────────────────────────────────
+// GET /products is a public endpoint (per OpenAPI spec). getProducts() in
+// products.ts does not accept a token. Admin role is already enforced by the
+// admin page guard before DashboardSection mounts.
+//
+// ── Revenue calculation ──────────────────────────────────────────────────────
+// The Order schema has paymentReference (nullable string).
+// The backend sets this to a Paystack reference string when the webhook
+// receives a charge.success event. A non-null value means payment was confirmed.
+// Revenue = sum of totalPrice for orders with paymentReference !== null.
+// Orders with null paymentReference are PENDING/unpaid and excluded.
+//
+// ── Why Top Categories is unavailable ───────────────────────────────────────
+// The Product schema (confirmed from OpenAPI) has no category field:
+//   id, name, description, price, imageUrl, stock, createdBy, createdAt, updatedAt
+// Fabricating category groupings from product names would be misleading.
+// The widget is preserved in the layout but shows an honest unavailable state.
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
 import { getAdminOrders, type Order, type OrderStatus } from "@/app/lib/checkout";
-import { AuthError } from "@/app/lib/auth";
+import { getAdminUsers, type User, AuthError } from "@/app/lib/auth";
+import { getProducts } from "@/app/lib/products";
 import { fmt } from "@/app/components/cart/cartTypes";
 
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
-// These are exported because OrdersSection, ProductsSection, and
-// CustomersSection all import Badge from this file.
+// Exported — OrdersSection, ProductsSection, and CustomersSection import Badge.
 
 export function Badge({ label, className }: { label: string; className: string }) {
   return (
@@ -77,19 +108,12 @@ export function ViewBtn() {
   );
 }
 
-// ─── Shared table class constants ─────────────────────────────────────────────
+// ─── Table class constants ────────────────────────────────────────────────────
 
 const thClass = "text-[0.62rem] font-medium tracking-[0.18em] uppercase text-warmgray px-5 py-3 text-left bg-[#f4f2ee] border-b border-charcoal/[0.09]";
 const tdClass = "px-5 py-3.5 text-[0.83rem] text-charcoal border-b border-charcoal/[0.04]";
 
-// ─── Dashboard stat cards (still mocked — no backend analytics endpoint) ──────
-
-const STATS = [
-  { label: "Total Revenue", val: "₦4.2M", sub: "+18.4% this month", up: true,  color: "gold",  icon: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#c8a96e" strokeWidth={1.8}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> },
-  { label: "Total Orders",  val: "284",   sub: "+12 new today",     up: true,  color: "green", icon: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#4a9068" strokeWidth={1.8}><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> },
-  { label: "Customers",     val: "1,480", sub: "+34 this week",     up: true,  color: "blue",  icon: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#4a82b8" strokeWidth={1.8}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> },
-  { label: "Products",      val: "48",    sub: "3 low stock",       up: false, color: "rust",  icon: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#b05c3a" strokeWidth={1.8}><path d="M20 7H4a1 1 0 00-1 1v10a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg> },
-];
+// ─── Colour map for stat cards (layout only — not data) ───────────────────────
 
 const colorMap: Record<string, { bar: string; icon: string }> = {
   gold:  { bar: "from-[#a8893e] to-[#c8a96e]", icon: "bg-[rgba(200,169,110,0.1)]" },
@@ -98,24 +122,35 @@ const colorMap: Record<string, { bar: string; icon: string }> = {
   rust:  { bar: "from-[#8a3a1e] to-[#b05c3a]", icon: "bg-[rgba(176,92,58,0.1)]"   },
 };
 
-// ─── Revenue chart (still mocked — no backend time-series endpoint) ───────────
+// ─── Stat card icon SVGs (visual only — not data) ─────────────────────────────
 
-const CHART_HEIGHTS = [45, 62, 50, 78, 58, 92, 70];
-const CHART_LABELS  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const STAT_ICONS = {
+  revenue:   <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#c8a96e" strokeWidth={1.8}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
+  orders:    <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#4a9068" strokeWidth={1.8}><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
+  customers: <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#4a82b8" strokeWidth={1.8}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>,
+  products:  <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="#b05c3a" strokeWidth={1.8}><path d="M20 7H4a1 1 0 00-1 1v10a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>,
+};
 
-// ─── Top categories (still mocked — no backend category breakdown endpoint) ───
+// ─── Revenue chart helpers ────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  { name: "Jackets",      amt: "₦1.2M", pct: 82 },
-  { name: "Dresses",      amt: "₦890K", pct: 66 },
-  { name: "Accessories",  amt: "₦640K", pct: 48 },
-  { name: "Trousers",     amt: "₦420K", pct: 32 },
-  { name: "Tops",         amt: "₦290K", pct: 20 },
-];
+// Returns an array of the last N calendar days as "YYYY-MM-DD" strings,
+// from oldest to newest. Used to build the 7-day revenue chart.
+function lastNDays(n: number): string[] {
+  const days: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10)); // "YYYY-MM-DD"
+  }
+  return days;
+}
 
-// ─── Recent Orders — real backend status badge colours ────────────────────────
-// Keyed by the backend's uppercase OrderStatus values.
-// Colours match the conventions used in OrdersSection.tsx.
+// Short day label: "Mon", "Tue", etc. from a "YYYY-MM-DD" string.
+function dayLabel(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-GB", { weekday: "short" });
+}
+
+// ─── Recent Orders badge colours ─────────────────────────────────────────────
 
 const recentOrderStatusBadge: Record<OrderStatus, string> = {
   PENDING:    "bg-[rgba(154,150,144,0.12)] text-[#7a776f]",
@@ -125,16 +160,31 @@ const recentOrderStatusBadge: Record<OrderStatus, string> = {
   CANCELLED:  "bg-[rgba(176,92,58,0.10)]   text-[#b05c3a]",
 };
 
-// Format an ISO date string to a short readable date: "8 Sep 2026"
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
   });
 }
 
-// Capitalise only the first letter: "PENDING" → "Pending"
 function toLabel(s: string) {
   return s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+// ─── Metric loading/error state type ─────────────────────────────────────────
+// Used to track independent loading/error state for each API call so that
+// a failure in one endpoint doesn't blank unrelated widgets.
+
+type MetricState<T> = {
+  loading: boolean;
+  error: string;
+  data: T | null;
+};
+
+// ─── Stat card loading skeleton ──────────────────────────────────────────────
+// Declared at module level (not inside DashboardSection) so React does not
+// treat it as a new component type on every render.
+function StatSkeleton() {
+  return <div className="h-[2rem] bg-charcoal/[0.08] rounded animate-pulse w-2/3" />;
 }
 
 // ─── DashboardSection ─────────────────────────────────────────────────────────
@@ -145,46 +195,134 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
   const { token, clearAuth } = useAuth();
   const router = useRouter();
 
-  // ── Recent Orders state ───────────────────────────────────────────────────
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(true);
-  const [ordersError, setOrdersError] = useState("");
+  // ── Independent metric states ─────────────────────────────────────────────
+  // Each API call has its own loading/error/data state so failures are isolated.
 
-  // ── Fetch recent orders on mount ──────────────────────────────────────────
-  // Reuses getAdminOrders() from app/lib/checkout.ts — the same function
-  // already used by OrdersSection.tsx. No duplicate fetch logic.
+  // All orders — used for: Total Orders count, Revenue, Revenue chart, Recent Orders
+  const [ordersState, setOrdersState] = useState<MetricState<Order[]>>({
+    loading: true, error: "", data: null,
+  });
+
+  // All users — used for: Total Customers (role === "USER" only)
+  const [usersState, setUsersState] = useState<MetricState<User[]>>({
+    loading: true, error: "", data: null,
+  });
+
+  // All products — used for: Total Products count
+  const [productsState, setProductsState] = useState<MetricState<number>>({
+    loading: true, error: "", data: null,
+  });
+
+  // ── Fetch all metrics on mount ────────────────────────────────────────────
+  // Three independent requests fire in parallel. Each updates its own state
+  // slice — a failure in one does not block the others from rendering.
   useEffect(() => {
-    // token is null while AuthContext is still initialising — wait for it
+    // Wait for AuthContext to finish loading before making authenticated requests
     if (token === null) return;
 
+    // ── Orders (GET /orders) ─────────────────────────────────────────────────
     void (async () => {
-      setOrdersLoading(true);
-      setOrdersError("");
       try {
         const res = await getAdminOrders(token);
-        // Sort most recent first, then keep only the top 5 for the widget
-        const sorted = [...res.data].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setRecentOrders(sorted.slice(0, 5));
+        setOrdersState({ loading: false, error: "", data: res.data });
       } catch (err: unknown) {
-        // 401 — token expired while the admin was on the dashboard
         if (err instanceof AuthError) {
           clearAuth();
           router.push("/login");
           return;
         }
-        setOrdersError(
-          err instanceof Error ? err.message : "Could not load recent orders."
-        );
-      } finally {
-        setOrdersLoading(false);
+        setOrdersState({
+          loading: false,
+          error: err instanceof Error ? err.message : "Could not load orders.",
+          data: null,
+        });
       }
     })();
+
+    // ── Users (GET /users) ────────────────────────────────────────────────────
+    void (async () => {
+      try {
+        const res = await getAdminUsers(token);
+        setUsersState({ loading: false, error: "", data: res.data });
+      } catch (err: unknown) {
+        if (err instanceof AuthError) {
+          // Already handled by the orders fetch above if both get 401.
+          // Redirect only if we haven't already.
+          clearAuth();
+          router.push("/login");
+          return;
+        }
+        setUsersState({
+          loading: false,
+          error: err instanceof Error ? err.message : "Could not load users.",
+          data: null,
+        });
+      }
+    })();
+
+    // ── Products (GET /products) ──────────────────────────────────────────────
+    // Public endpoint — no token needed.
+    void (async () => {
+      try {
+        const res = await getProducts();
+        setProductsState({ loading: false, error: "", data: res.data.length });
+      } catch (err: unknown) {
+        setProductsState({
+          loading: false,
+          error: err instanceof Error ? err.message : "Could not load products.",
+          data: null,
+        });
+      }
+    })();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Derived metrics ───────────────────────────────────────────────────────
+  // Calculated once from the fetched data — no hardcoded values.
+
+  const allOrders = ordersState.data ?? [];
+
+  // Total Orders: count of all orders in the system
+  const totalOrders = allOrders.length;
+
+  // Revenue: sum of totalPrice for PAID orders only.
+  // paymentReference is set by the Paystack webhook on charge.success.
+  // null = not yet paid / pending. Non-null = payment confirmed.
+  const paidOrders = allOrders.filter((o) => o.paymentReference !== null);
+  const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+
+  // Total Customers: users with role === "USER" only (excludes admins)
+  const allUsers = usersState.data ?? [];
+  const totalCustomers = allUsers.filter((u) => u.role === "USER").length;
+
+  // Total Products: direct count from GET /products response
+  const totalProducts = productsState.data ?? 0;
+
+  // Revenue chart: daily revenue from paid orders over the last 7 calendar days.
+  // Each bar = sum of totalPrice for paid orders whose createdAt falls on that day.
+  const last7Days = lastNDays(7);
+  const chartData = last7Days.map((day) => {
+    const dayRevenue = paidOrders
+      .filter((o) => o.createdAt.slice(0, 10) === day)
+      .reduce((sum, o) => sum + o.totalPrice, 0);
+    return { day, label: dayLabel(day), revenue: dayRevenue };
+  });
+  // Normalise bar heights to a 0–100% scale relative to the max day.
+  // If all days are zero (no paid orders), show flat baseline bars.
+  const maxDayRevenue = Math.max(...chartData.map((d) => d.revenue), 1);
+  const chartBars = chartData.map((d) => ({
+    ...d,
+    heightPct: Math.max(4, Math.round((d.revenue / maxDayRevenue) * 100)),
+    // minimum 4% so bars are always visible even when revenue is 0
+  }));
+
+  // ── Dashboard date — real current date ───────────────────────────────────
+  const todayLabel = new Date().toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div>
       {/* Header */}
@@ -199,7 +337,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
         </button>
       </div>
 
-      {/* ── Stat cards (mocked — no backend analytics endpoint yet) ── */}
+      {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
 
         {/* Revenue */}
@@ -316,7 +454,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
 
       </div>
 
-      {/* ── Revenue chart + Top categories (both mocked) ── */}
+      {/* ── Revenue Overview chart + Top Categories ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mb-4">
 
         {/* Revenue Overview — real 7-day chart from paid orders */}
@@ -392,7 +530,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
 
       </div>
 
-      {/* ── Recent Orders — real data from GET /orders ── */}
+      {/* ── Recent Orders — real data from GET /orders (unchanged) ── */}
       <div className="bg-white border border-charcoal/[0.09] rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-charcoal/[0.09]">
           <span className="font-cormorant text-[1rem] font-semibold text-charcoal">Recent Orders</span>
@@ -405,7 +543,7 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
         </div>
 
         {/* Loading */}
-        {ordersLoading && (
+        {ordersState.loading && (
           <div className="flex items-center justify-center py-10">
             <div className="flex flex-col items-center gap-2">
               <svg className="animate-spin" width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -420,64 +558,71 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
         )}
 
         {/* Error */}
-        {!ordersLoading && ordersError && (
+        {!ordersState.loading && ordersState.error && (
           <div className="px-5 py-4">
             <div
               className="border rounded-lg px-4 py-3 text-[0.82rem] font-barlow"
               style={{ background: "rgba(176,92,58,0.08)", borderColor: "rgba(176,92,58,0.25)", color: "#b05c3a" }}
               role="alert"
             >
-              {ordersError}
+              {ordersState.error}
             </div>
           </div>
         )}
 
         {/* Empty */}
-        {!ordersLoading && !ordersError && recentOrders.length === 0 && (
+        {!ordersState.loading && !ordersState.error && allOrders.length === 0 && (
           <div className="py-10 text-center">
             <p className="text-[0.82rem] text-muted font-barlow">No orders yet.</p>
           </div>
         )}
 
-        {/* Table */}
-        {!ordersLoading && !ordersError && recentOrders.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  {["Order ID", "Customer", "Amount", "Status", "Date"].map((h) => (
-                    <th key={h} className={thClass}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((o) => (
-                  <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
-                    {/* Order ID */}
-                    <td className={tdClass}>
-                      <span className="font-medium" style={{ color: "#a8893e" }}>
-                        #BV-{o.id}
-                      </span>
-                    </td>
-                    {/* Customer — GET /orders returns userId only, not a name */}
-                    <td className={`${tdClass} text-muted`}>User #{o.userId}</td>
-                    {/* Amount */}
-                    <td className={`${tdClass} font-medium`}>{fmt(o.totalPrice)}</td>
-                    {/* Status */}
-                    <td className={tdClass}>
-                      <Badge
-                        label={toLabel(o.status)}
-                        className={recentOrderStatusBadge[o.status]}
-                      />
-                    </td>
-                    {/* Date */}
-                    <td className={`${tdClass} text-muted`}>{formatDate(o.createdAt)}</td>
+        {/* Table — most recent 5 orders */}
+        {!ordersState.loading && !ordersState.error && allOrders.length > 0 && (() => {
+          const recent = [...allOrders]
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 5);
+
+          // Build userId → User lookup from the already-fetched users list.
+          // usersState.data may be null if GET /users failed — fall back to
+          // "User #N" in that case so the orders table still renders correctly.
+          const userMap = new Map(
+            (usersState.data ?? []).map((u) => [u.id, u])
+          );
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    {["Order ID", "Customer", "Amount", "Status", "Date"].map((h) => (
+                      <th key={h} className={thClass}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {recent.map((o) => {
+                    const customer = userMap.get(o.userId);
+                    const customerName = customer ? customer.name : `User #${o.userId}`;
+                    return (
+                      <tr key={o.id} className="hover:bg-[#faf9f6] transition-colors last:[&>td]:border-0">
+                        <td className={tdClass}>
+                          <span className="font-medium" style={{ color: "#a8893e" }}>#BV-{o.id}</span>
+                        </td>
+                        <td className={`${tdClass} text-muted`}>{customerName}</td>
+                        <td className={`${tdClass} font-medium`}>{fmt(o.totalPrice)}</td>
+                        <td className={tdClass}>
+                          <Badge label={toLabel(o.status)} className={recentOrderStatusBadge[o.status]} />
+                        </td>
+                        <td className={`${tdClass} text-muted`}>{formatDate(o.createdAt)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
