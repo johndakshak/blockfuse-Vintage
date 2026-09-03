@@ -6,6 +6,7 @@
 // It now receives real cart data through props from the Checkout page,
 // which fetches it via getCartItems() on mount.
 
+import Image from "next/image";
 import Link from "next/link";
 import { type CartItem, fmt } from "@/app/components/cart/cartTypes";
 
@@ -46,12 +47,24 @@ export default function OrderSummary({ items, cartTotal, shipCost }: Props) {
           ) : (
             items.map((item) => (
               <div key={item.id} className="flex gap-3 items-center">
-                {/* Image placeholder — product images will be added when available */}
-                <div className="relative w-[52px] h-[62px] rounded-lg bg-parchment border border-charcoal/10 flex-shrink-0 flex items-center justify-center">
-                  <span className="text-[0.5rem] text-warmgray uppercase tracking-wider text-center leading-tight">
-                    Photo
-                  </span>
-                  <span className="absolute -top-1.5 -right-1.5 bg-charcoal text-cream text-[0.55rem] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {/* Product image — real Cloudinary URL from backend; fallback for missing */}
+                <div className="relative w-[52px] h-[62px] rounded-lg bg-parchment border border-charcoal/10 flex-shrink-0 overflow-hidden">
+                  {item.imageUrl ? (
+                    <Image
+                      src={item.imageUrl}
+                      alt={item.name}
+                      fill
+                      className="object-cover"
+                      sizes="52px"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-[0.5rem] text-warmgray uppercase tracking-wider text-center leading-tight">
+                        Photo
+                      </span>
+                    </div>
+                  )}
+                  <span className="absolute -top-1.5 -right-1.5 bg-charcoal text-cream text-[0.55rem] font-bold w-4 h-4 rounded-full flex items-center justify-center z-10">
                     {item.qty}
                   </span>
                 </div>

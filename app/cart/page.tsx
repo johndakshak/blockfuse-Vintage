@@ -29,16 +29,18 @@ import Suggestions from "../components/cart/Suggestions";
 import { type CartItem, toDisplayItem } from "../components/cart/cartTypes";
 import {
   getCartItems,
+  addToCart,
   updateCartItem,
   removeCartItem,
 } from "@/app/lib/cart";
 import { useAuth } from "@/app/context/AuthContext";
+import { AuthError } from "@/app/lib/auth";
 
 export default function CartPage() {
   // ── Auth ──────────────────────────────────────────────────────────────────
   // We read the JWT token from the global AuthContext.
   // The token is required for every cart API call.
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, clearAuth } = useAuth();
   const router = useRouter();
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -46,6 +48,9 @@ export default function CartPage() {
   const [totalPrice, setTotalPrice] = useState<number>(0);
   const [loading, setLoading]       = useState(true);   // true while fetching cart
   const [error, setError]           = useState("");     // shown when a fetch fails
+
+  // Tracks which suggestion product IDs have an in-flight POST /cart request
+  const [addingIds, setAddingIds]   = useState<Set<number>>(new Set());
 
   // ── Derived values ────────────────────────────────────────────────────────
   const itemCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
@@ -64,6 +69,14 @@ export default function CartPage() {
       setCartItems(response.data.map(toDisplayItem));
       setTotalPrice(response.totalPrice);
     } catch (err: unknown) {
+      // 401 — token expired mid-session while loading the cart.
+      // Clear the session and redirect to login, the same way every other
+      // protected page handles AuthError (checkout, orders, admin sections).
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not load your cart.");
     } finally {
       setLoading(false);
@@ -110,6 +123,11 @@ export default function CartPage() {
       // Reload the full cart from the backend to keep everything in sync
       await loadCart(token);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not update quantity.");
     }
   }
@@ -122,6 +140,11 @@ export default function CartPage() {
       await removeCartItem(token, cartItemId);
       await loadCart(token);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not remove item.");
     }
   }
@@ -138,25 +161,48 @@ export default function CartPage() {
       await Promise.all(cartItems.map((item) => removeCartItem(token, item.id)));
       await loadCart(token);
     } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not clear cart.");
     }
   }
 
-  // ── Add a suggestion to cart ───────────────────────────────────────────────
-  // The Suggestions component provides hardcoded product names/prices.
-  // These suggestions don't have real productIds yet (products aren't
-  // integrated with the backend yet), so we can't call POST /cart until
-  // the Products integration is done.
-  //
-  // For now: show an informational message explaining this.
-  // The Suggestions UI is preserved; it just can't call the API yet.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function addSuggestion(_name: string, _price: number) {
-    setError(
-      "Suggested items cannot be added yet — product integration is coming soon."
-    );
-    // Clear the message after 3 seconds so it doesn't persist
-    setTimeout(() => setError(""), 3000);
+  // ── Add a suggested product to cart ───────────────────────────────────────
+  // Called by the Suggestions component with the real product ID.
+  // Calls addToCart(token, productId, 1) then reloads the full cart so the
+  // cart count and item list stay in sync with the backend.
+  async function addSuggestion(productId: number) {
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    // Mark this product as in-flight so the Suggestions card shows "Adding…"
+    setAddingIds((prev) => new Set(prev).add(productId));
+    setError("");
+
+    try {
+      await addToCart(token, productId, 1);
+      // Reload the cart to reflect the newly added item
+      await loadCart(token);
+    } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        clearAuth();
+        router.push("/login");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Could not add item to cart.");
+    } finally {
+      // Always clear the loading state for this product
+      setAddingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -290,7 +336,11 @@ export default function CartPage() {
                   onRemove={removeItem}
                   onClear={clearCart}
                 />
-                <Suggestions onAdd={addSuggestion} />
+                <Suggestions
+                  cartProductIds={cartItems.map((item) => item.productId)}
+                  onAdd={addSuggestion}
+                  addingIds={addingIds}
+                />
               </div>
 
               {/* Right: summary — passes the server totalPrice as the subtotal */}

@@ -70,11 +70,13 @@ export type CartErrorResponse = {
 // The flattened shape that CartItemList and CartSummary use.
 // We map BackendCartItem → CartItem when we receive data from the API.
 export type CartItem = {
-  id: number;     // cart item ID (used for PATCH and DELETE)
-  name: string;   // product.name
-  meta: string;   // e.g. "In stock · 5 left" — derived from product.stock
-  price: number;  // product.price
-  qty: number;    // quantity
+  id: number;           // cart item ID (used for PATCH and DELETE)
+  productId: number;    // the product's own ID — used to exclude from Suggestions
+  name: string;         // product.name
+  meta: string;         // e.g. "In stock · 5 left" — derived from product.stock
+  price: number;        // product.price
+  qty: number;          // quantity
+  imageUrl: string;     // product.imageUrl — Cloudinary URL for the product photo
 };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -86,11 +88,13 @@ export const fmt = (n: number) => "₦" + n.toLocaleString("en-NG");
 export function toDisplayItem(item: BackendCartItem): CartItem {
   return {
     id: item.id,
+    productId: item.productId,
     name: item.product.name,
     meta: item.product.stock > 0
       ? `In stock · ${item.product.stock} left`
       : "Out of stock",
     price: item.product.price,
     qty: item.quantity,
+    imageUrl: item.product.imageUrl,
   };
 }

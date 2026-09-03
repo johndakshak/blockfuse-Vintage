@@ -52,6 +52,8 @@ export default function LoginPage() {
   // error holds the top-level banner message (backend error or network error)
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // rememberMe controls whether the token is stored in localStorage (true) or sessionStorage (false)
+  const [rememberMe, setRememberMe] = useState(false);
 
   // useRouter lets us redirect the user after login
   const router = useRouter();
@@ -85,8 +87,9 @@ export default function LoginPage() {
       // throws a friendly Error on backend error (400/404) or network failure
       const response = await loginUser(email, password);
 
-      // Save token + fetch user profile via GET /me
-      await login(response.access_token);
+      // Save token + fetch user profile via GET /me.
+      // Pass rememberMe so AuthContext stores the token in the correct location.
+      await login(response.access_token, rememberMe);
 
       // Redirect to the homepage
       router.push("/");
@@ -269,10 +272,12 @@ export default function LoginPage() {
               <input
                 type="checkbox"
                 name="remember"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
                 className="w-4 h-4 cursor-pointer rounded accent-accent"
               />
               <span className="text-sm font-barlow font-light text-muted">
-                Remember me for 30 days
+                Keep me signed in
               </span>
             </label>
 

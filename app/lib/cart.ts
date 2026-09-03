@@ -17,6 +17,13 @@
 // 403 handling:
 //   403 Forbidden is thrown as a plain Error — the session is NOT cleared
 //   because the token is valid; the user simply lacks permission for that item.
+//
+// Content-Type handling:
+//   Every function checks the response Content-Type before calling
+//   response.json(). If the backend is unreachable or returns an HTML error
+//   page (e.g. Render free-tier cold start), this produces the same friendly
+//   "server unavailable" message used by auth.ts, products.ts, and checkout.ts
+//   rather than a cryptic JSON SyntaxError.
 
 import { AuthError } from "@/app/lib/auth";
 import type {
@@ -48,6 +55,13 @@ export async function getCartItems(token: string): Promise<GetCartItemsResponse>
   // 401 — session invalid/expired
   if (response.status === 401) {
     throw new AuthError();
+  }
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
   }
 
   const data: GetCartItemsResponse | CartErrorResponse = await response.json();
@@ -99,6 +113,13 @@ export async function addToCart(
     throw new AuthError();
   }
 
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
   const data: AddToCartResponse | CartErrorResponse = await response.json();
 
   if (!data.success) {
@@ -139,6 +160,13 @@ export async function updateCartItem(
     throw new AuthError();
   }
 
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server is currently unavailable. Please wait a moment and try again."
+    );
+  }
+
   const data: UpdateCartItemResponse | CartErrorResponse = await response.json();
 
   if (!data.success) {
@@ -176,6 +204,12 @@ export async function removeCartItem(
   // DELETE returns { success: true, msg: "Cart item deleted successfully" }
   // We only need to know if it failed.
   if (!response.ok) {
+    const contentType = response.headers.get("Content-Type") ?? "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(
+        "The server is currently unavailable. Please wait a moment and try again."
+      );
+    }
     const data: CartErrorResponse = await response.json();
     throw new Error(data.msg || "Could not remove cart item.");
   }

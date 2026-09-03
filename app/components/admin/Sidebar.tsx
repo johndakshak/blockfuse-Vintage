@@ -1,4 +1,8 @@
+'use client'
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/context/AuthContext";
 
 export type SectionId = "dashboard" | "products" | "orders" | "customers" | "settings";
 
@@ -33,7 +37,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       {
         id: "products",
         label: "Products",
-        pill: "48",
         icon: (
           <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 fill-none stroke-current" strokeWidth={1.7}>
             <path d="M20 7H4a1 1 0 00-1 1v10a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z" />
@@ -44,7 +47,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       {
         id: "orders",
         label: "Orders",
-        pill: "12",
         icon: (
           <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 fill-none stroke-current" strokeWidth={1.7}>
             <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
@@ -91,6 +93,24 @@ type Props = {
 };
 
 export default function Sidebar({ active, onNavigate, isOpen, onClose }: Props) {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  // The admin's initials derived from their real name (e.g. "John Doe" → "JD")
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0].toUpperCase())
+        .join("")
+    : "AD";
+
+  function handleLogout() {
+    logout();
+    router.push("/");
+  }
+
   return (
     <>
       {/* Mobile overlay */}
@@ -153,24 +173,24 @@ export default function Sidebar({ active, onNavigate, isOpen, onClose }: Props) 
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* Footer — shows the real logged-in admin user */}
         <div className="flex items-center gap-2.5 px-5 py-4 border-t border-charcoal/[0.09]">
           <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-[0.7rem] font-semibold flex-shrink-0" style={{ color: "#a8893e" }}>
-            AD
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[0.8rem] font-medium text-charcoal truncate">Admin User</div>
-            <div className="text-[0.62rem] tracking-[0.08em] uppercase text-warmgray">Super Admin</div>
+            <div className="text-[0.8rem] font-medium text-charcoal truncate">{user?.name ?? "Admin"}</div>
+            <div className="text-[0.62rem] tracking-[0.08em] uppercase text-warmgray truncate">{user?.email ?? ""}</div>
           </div>
-          <Link
-            href="/login"
+          <button
+            onClick={handleLogout}
             title="Logout"
-            className="text-warmgray hover:text-rust transition-colors"
+            className="text-warmgray hover:text-rust transition-colors bg-transparent border-none cursor-pointer p-0"
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-          </Link>
+          </button>
         </div>
       </aside>
     </>

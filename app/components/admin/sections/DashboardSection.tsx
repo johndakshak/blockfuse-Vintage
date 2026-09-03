@@ -187,10 +187,12 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div>
+      {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <h2 className="font-cormorant text-[1.4rem] font-semibold text-charcoal">Dashboard</h2>
-          <p className="text-[0.75rem] text-muted mt-0.5">Monday, March 9, 2026</p>
+          {/* Real current date — no longer hardcoded */}
+          <p className="text-[0.75rem] text-muted mt-0.5">{todayLabel}</p>
         </div>
         <button className="font-barlow text-[0.72rem] font-medium tracking-[0.12em] uppercase px-4 py-2 rounded-lg border border-charcoal/[0.09] text-muted hover:border-accent hover:text-charcoal transition-all cursor-pointer bg-transparent">
           Download Report
@@ -199,77 +201,195 @@ export default function DashboardSection({ onViewAllOrders }: Props) {
 
       {/* ── Stat cards (mocked — no backend analytics endpoint yet) ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        {STATS.map((s) => {
-          const c = colorMap[s.color];
+
+        {/* Revenue */}
+        {(() => {
+          const c = colorMap["gold"];
           return (
-            <div key={s.label} className="bg-white border border-charcoal/[0.09] rounded-xl p-5 relative overflow-hidden hover:shadow-[0_4px_20px_rgba(26,26,24,0.07)] hover:-translate-y-0.5 transition-all duration-200">
+            <div className="bg-white border border-charcoal/[0.09] rounded-xl p-5 relative overflow-hidden hover:shadow-[0_4px_20px_rgba(26,26,24,0.07)] hover:-translate-y-0.5 transition-all duration-200">
               <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-xl bg-gradient-to-r ${c.bar}`} />
               <div className={`absolute top-4 right-4 w-9 h-9 rounded-[9px] flex items-center justify-center ${c.icon}`}>
-                {s.icon}
+                {STAT_ICONS.revenue}
               </div>
-              <p className="text-[0.67rem] tracking-[0.18em] uppercase text-warmgray mb-2">{s.label}</p>
-              <p className="font-cormorant text-[1.9rem] font-semibold text-charcoal leading-none mb-1">{s.val}</p>
-              <p className={`text-[0.73rem] flex items-center gap-1 ${s.up ? "text-[#4a9068]" : "text-[#b05c3a]"}`}>
-                <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  {s.up ? <path d="M18 15l-6-6-6 6"/> : <path d="M6 9l6 6 6-6"/>}
-                </svg>
-                {s.sub}
-              </p>
+              <p className="text-[0.67rem] tracking-[0.18em] uppercase text-warmgray mb-2">Total Revenue</p>
+              {ordersState.loading ? (
+                <StatSkeleton />
+              ) : ordersState.error ? (
+                <p className="font-barlow text-[0.75rem] text-muted">Unavailable</p>
+              ) : (
+                <>
+                  <p className="font-cormorant text-[1.9rem] font-semibold text-charcoal leading-none mb-1">
+                    {fmt(totalRevenue)}
+                  </p>
+                  <p className="text-[0.73rem] text-muted">
+                    {paidOrders.length} paid order{paidOrders.length !== 1 ? "s" : ""}
+                  </p>
+                </>
+              )}
             </div>
           );
-        })}
+        })()}
+
+        {/* Total Orders */}
+        {(() => {
+          const c = colorMap["green"];
+          return (
+            <div className="bg-white border border-charcoal/[0.09] rounded-xl p-5 relative overflow-hidden hover:shadow-[0_4px_20px_rgba(26,26,24,0.07)] hover:-translate-y-0.5 transition-all duration-200">
+              <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-xl bg-gradient-to-r ${c.bar}`} />
+              <div className={`absolute top-4 right-4 w-9 h-9 rounded-[9px] flex items-center justify-center ${c.icon}`}>
+                {STAT_ICONS.orders}
+              </div>
+              <p className="text-[0.67rem] tracking-[0.18em] uppercase text-warmgray mb-2">Total Orders</p>
+              {ordersState.loading ? (
+                <StatSkeleton />
+              ) : ordersState.error ? (
+                <p className="font-barlow text-[0.75rem] text-muted">Unavailable</p>
+              ) : (
+                <>
+                  <p className="font-cormorant text-[1.9rem] font-semibold text-charcoal leading-none mb-1">
+                    {totalOrders.toLocaleString("en-NG")}
+                  </p>
+                  <p className="text-[0.73rem] text-muted">
+                    all time
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Total Customers */}
+        {(() => {
+          const c = colorMap["blue"];
+          return (
+            <div className="bg-white border border-charcoal/[0.09] rounded-xl p-5 relative overflow-hidden hover:shadow-[0_4px_20px_rgba(26,26,24,0.07)] hover:-translate-y-0.5 transition-all duration-200">
+              <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-xl bg-gradient-to-r ${c.bar}`} />
+              <div className={`absolute top-4 right-4 w-9 h-9 rounded-[9px] flex items-center justify-center ${c.icon}`}>
+                {STAT_ICONS.customers}
+              </div>
+              <p className="text-[0.67rem] tracking-[0.18em] uppercase text-warmgray mb-2">Customers</p>
+              {usersState.loading ? (
+                <StatSkeleton />
+              ) : usersState.error ? (
+                <p className="font-barlow text-[0.75rem] text-muted">Unavailable</p>
+              ) : (
+                <>
+                  <p className="font-cormorant text-[1.9rem] font-semibold text-charcoal leading-none mb-1">
+                    {totalCustomers.toLocaleString("en-NG")}
+                  </p>
+                  <p className="text-[0.73rem] text-muted">
+                    registered users
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Total Products */}
+        {(() => {
+          const c = colorMap["rust"];
+          return (
+            <div className="bg-white border border-charcoal/[0.09] rounded-xl p-5 relative overflow-hidden hover:shadow-[0_4px_20px_rgba(26,26,24,0.07)] hover:-translate-y-0.5 transition-all duration-200">
+              <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-xl bg-gradient-to-r ${c.bar}`} />
+              <div className={`absolute top-4 right-4 w-9 h-9 rounded-[9px] flex items-center justify-center ${c.icon}`}>
+                {STAT_ICONS.products}
+              </div>
+              <p className="text-[0.67rem] tracking-[0.18em] uppercase text-warmgray mb-2">Products</p>
+              {productsState.loading ? (
+                <StatSkeleton />
+              ) : productsState.error ? (
+                <p className="font-barlow text-[0.75rem] text-muted">Unavailable</p>
+              ) : (
+                <>
+                  <p className="font-cormorant text-[1.9rem] font-semibold text-charcoal leading-none mb-1">
+                    {totalProducts.toLocaleString("en-NG")}
+                  </p>
+                  <p className="text-[0.73rem] text-muted">
+                    in catalogue
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
       </div>
 
       {/* ── Revenue chart + Top categories (both mocked) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mb-4">
-        {/* Revenue chart */}
+
+        {/* Revenue Overview — real 7-day chart from paid orders */}
         <div className="bg-white border border-charcoal/[0.09] rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-charcoal/[0.09]">
             <span className="font-cormorant text-[1rem] font-semibold text-charcoal">Revenue Overview</span>
-            <select className="font-barlow text-[0.72rem] text-muted border border-charcoal/[0.09] rounded-md px-2 py-1 bg-white outline-none">
-              <option>Last 7 days</option><option>Last 30 days</option><option>This year</option>
-            </select>
+            <span className="font-barlow text-[0.72rem] text-muted">Last 7 days</span>
           </div>
-          <div className="px-5 pt-5 pb-3">
-            <div className="flex items-end gap-1.5 h-[140px] pb-2 border-b border-charcoal/[0.09]">
-              {CHART_HEIGHTS.map((h, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-t bg-gradient-to-b from-accent to-[#a8893e] opacity-70 hover:opacity-100 hover:scale-y-[1.03] transition-all duration-200 cursor-pointer origin-bottom"
-                  style={{ height: `${h}%` }}
-                />
-              ))}
+
+          {/* Loading */}
+          {ordersState.loading && (
+            <div className="px-5 pt-5 pb-3">
+              <div className="flex items-end gap-1.5 h-[140px] pb-2">
+                {[1,2,3,4,5,6,7].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-t bg-charcoal/[0.08] animate-pulse"
+                    style={{ height: "40%" }}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-1.5 pt-1.5">
-              {CHART_LABELS.map((l) => (
-                <span key={l} className="flex-1 text-center text-[0.62rem] text-warmgray tracking-[0.06em]">{l}</span>
-              ))}
+          )}
+
+          {/* Error */}
+          {!ordersState.loading && ordersState.error && (
+            <div className="px-5 py-8 text-center">
+              <p className="font-barlow text-[0.78rem] text-muted">Revenue data unavailable</p>
             </div>
-          </div>
+          )}
+
+          {/* Real chart */}
+          {!ordersState.loading && !ordersState.error && (
+            <div className="px-5 pt-5 pb-3">
+              <div className="flex items-end gap-1.5 h-[140px] pb-2 border-b border-charcoal/[0.09]">
+                {chartBars.map((bar) => (
+                  <div
+                    key={bar.day}
+                    className="flex-1 rounded-t bg-gradient-to-b from-accent to-[#a8893e] opacity-70 hover:opacity-100 hover:scale-y-[1.03] transition-all duration-200 cursor-pointer origin-bottom"
+                    style={{ height: `${bar.heightPct}%` }}
+                    title={`${bar.label}: ${fmt(bar.revenue)}`}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-1.5 pt-1.5">
+                {chartBars.map((bar) => (
+                  <span key={bar.day} className="flex-1 text-center text-[0.62rem] text-warmgray tracking-[0.06em]">
+                    {bar.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Top categories */}
+        {/* Top Categories — unavailable (Product schema has no category field) */}
         <div className="bg-white border border-charcoal/[0.09] rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-charcoal/[0.09]">
             <span className="font-cormorant text-[1rem] font-semibold text-charcoal">Top Categories</span>
           </div>
-          <div className="px-5 py-4 flex flex-col gap-4">
-            {CATEGORIES.map((c) => (
-              <div key={c.name}>
-                <div className="flex justify-between mb-1.5">
-                  <span className="text-[0.82rem] text-charcoal">{c.name}</span>
-                  <span className="text-[0.75rem] text-muted">{c.amt}</span>
-                </div>
-                <div className="h-[5px] bg-[#f4f2ee] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#a8893e] to-accent rounded-full"
-                    style={{ width: `${c.pct}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+          <div className="px-5 py-8 flex flex-col items-center justify-center gap-2 text-center">
+            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#c8a96e" strokeWidth={1.4}>
+              <path d="M4 6h16M4 12h16M4 18h7" strokeLinecap="round" />
+            </svg>
+            <p className="font-barlow text-[0.78rem] text-muted leading-relaxed">
+              Category data unavailable
+            </p>
+            <p className="font-barlow text-[0.68rem] text-warmgray leading-relaxed">
+              Products have no category field in the backend
+            </p>
           </div>
         </div>
+
       </div>
 
       {/* ── Recent Orders — real data from GET /orders ── */}
