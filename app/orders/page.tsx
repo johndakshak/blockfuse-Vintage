@@ -286,9 +286,18 @@ export default function OrdersPage() {
                     <span className="text-[0.72rem] text-muted font-barlow">
                       {order.items.length} item{order.items.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="text-[0.72rem] font-barlow font-semibold text-charcoal">
-                      Total: {fmt(order.totalPrice)}
-                    </span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-[0.72rem] font-barlow font-semibold text-charcoal">
+                        Total: {fmt(order.totalPrice)}
+                      </span>
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="text-[0.68rem] font-barlow tracking-[0.1em] uppercase no-underline transition-colors hover:underline"
+                        style={{ color: "#a8893e" }}
+                      >
+                        View Details
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
