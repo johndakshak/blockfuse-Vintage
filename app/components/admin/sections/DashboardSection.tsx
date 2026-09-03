@@ -63,7 +63,7 @@ import { getAdminOrders, type Order, type OrderStatus } from "@/app/lib/checkout
 import { getAdminUsers, type User, AuthError } from "@/app/lib/auth";
 import { getProducts } from "@/app/lib/products";
 import { fmt } from "@/app/components/cart/cartTypes";
-import type { SectionId } from "../Sidebar";
+
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 // Exported — OrdersSection, ProductsSection, and CustomersSection import Badge.
